@@ -31,6 +31,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import URL
 from sshtunnel import SSHTunnelForwarder
 
+from superset.commands.database.ssh_tunnel.exceptions import SSHTunnelDatabasePortError
 from superset.databases.utils import make_url_safe
 from superset.superset_typing import DBConnectionMutator, EngineContextManager
 from superset.utils.core import get_query_source_from_request, get_user_id, QuerySource
@@ -508,10 +509,14 @@ class EngineManager:
         from superset.utils.ssh_tunnel import get_default_port
 
         backend = uri.get_backend_name()
+        port = uri.port or get_default_port(backend)
+        if not port:
+            raise SSHTunnelDatabasePortError()
+
         kwargs = {
             "ssh_address_or_host": (ssh_tunnel.server_address, ssh_tunnel.server_port),
             "ssh_username": ssh_tunnel.username,
-            "remote_bind_address": (uri.host, uri.port or get_default_port(backend)),
+            "remote_bind_address": (uri.host, port),
             "local_bind_address": (self.local_bind_address,),
             "debug_level": logging.getLogger("flask_appbuilder").level,
         }
