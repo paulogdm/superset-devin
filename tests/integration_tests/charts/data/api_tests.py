@@ -1181,7 +1181,7 @@ class TestGetChartDataApi(BaseTestChartDataApi):
         }
 
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
-    @with_config(QUERY_CONTEXT_SIDECAR_URL="http://sidecar.internal")
+    @with_config({"QUERY_CONTEXT_SIDECAR_URL": "http://sidecar.internal"})
     @mock.patch("superset.charts.data.api.ChartDataRestApi._get_data_response")
     @mock.patch("superset.charts.data.api.ChartDataCommand.validate")
     @mock.patch(
@@ -1226,7 +1226,7 @@ class TestGetChartDataApi(BaseTestChartDataApi):
         }
 
     @pytest.mark.usefixtures("load_birth_names_dashboard_with_slices")
-    @with_config(QUERY_CONTEXT_SIDECAR_URL="http://sidecar.internal")
+    @with_config({"QUERY_CONTEXT_SIDECAR_URL": "http://sidecar.internal"})
     @mock.patch("superset.charts.data.api.ChartDataRestApi._get_data_response")
     @mock.patch("superset.charts.data.api.ChartDataCommand.validate")
     @mock.patch(
