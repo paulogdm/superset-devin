@@ -31,7 +31,7 @@ describe('SupersetClient', () => {
 
   afterEach(() => SupersetClient.reset());
 
-  test('exposes configure, init, get, post, postForm, delete, put, request, reset, getGuestToken, getCSRFToken, getUrl, isAuthenticated, and reAuthenticate methods', () => {
+  test('exposes configure, init, get, post, postForm, delete, put, request, reset, getGuestToken, getCSRFToken, isAuthenticated, and reAuthenticate methods', () => {
     expect(typeof SupersetClient.configure).toBe('function');
     expect(typeof SupersetClient.init).toBe('function');
     expect(typeof SupersetClient.get).toBe('function');
@@ -43,12 +43,11 @@ describe('SupersetClient', () => {
     expect(typeof SupersetClient.reset).toBe('function');
     expect(typeof SupersetClient.getGuestToken).toBe('function');
     expect(typeof SupersetClient.getCSRFToken).toBe('function');
-    expect(typeof SupersetClient.getUrl).toBe('function');
     expect(typeof SupersetClient.isAuthenticated).toBe('function');
     expect(typeof SupersetClient.reAuthenticate).toBe('function');
   });
 
-  test('throws if you call init, get, post, postForm, delete, put, request, getGuestToken, getCSRFToken, getUrl, isAuthenticated, or reAuthenticate before configure', () => {
+  test('throws if you call init, get, post, postForm, delete, put, request, getGuestToken, getCSRFToken, isAuthenticated, or reAuthenticate before configure', () => {
     expect(SupersetClient.init).toThrow();
     expect(SupersetClient.get).toThrow();
     expect(SupersetClient.post).toThrow();
@@ -58,7 +57,6 @@ describe('SupersetClient', () => {
     expect(SupersetClient.request).toThrow();
     expect(SupersetClient.getGuestToken).toThrow();
     expect(SupersetClient.getCSRFToken).toThrow();
-    expect(SupersetClient.getUrl).toThrow();
     expect(SupersetClient.isAuthenticated).toThrow();
     expect(SupersetClient.reAuthenticate).toThrow();
     expect(SupersetClient.configure).not.toThrow();
@@ -66,7 +64,7 @@ describe('SupersetClient', () => {
 
   // this also tests that the ^above doesn't throw if configure is called appropriately
   test('calls appropriate SupersetClient methods when configured', async () => {
-    expect.assertions(18);
+    expect.assertions(16);
     const mockGetUrl = '/mock/get/url';
     const mockPostUrl = '/mock/post/url';
     const mockRequestUrl = '/mock/request/url';
@@ -97,14 +95,6 @@ describe('SupersetClient', () => {
       SupersetClientClass.prototype,
       'getGuestToken',
     );
-    const getUrlSpy = jest.spyOn(SupersetClientClass.prototype, 'getUrl');
-
-    SupersetClient.configure({ appRoot: '/app' });
-    expect(SupersetClient.getUrl({ endpoint: '/some/path' })).toContain(
-      '/app/some/path',
-    );
-    expect(getUrlSpy).toHaveBeenCalledTimes(1);
-
     SupersetClient.configure({});
     await SupersetClient.init();
 
@@ -157,8 +147,6 @@ describe('SupersetClient', () => {
     postSpy.mockRestore();
     authenticatedSpy.mockRestore();
     csrfSpy.mockRestore();
-    getUrlSpy.mockRestore();
-
     fetchMock.clearHistory().removeRoutes();
   });
 

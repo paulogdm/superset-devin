@@ -1192,7 +1192,7 @@ class TestGetChartDataApi(BaseTestChartDataApi):
         self,
         mock_fetch_query_context_from_sidecar,
         mock_create_query_context_from_form,
-        _mock_validate,
+        mock_validate,
         mock_get_data_response,
     ):
         chart = db.session.query(Slice).filter_by(slice_name="Genders").one()
@@ -1209,6 +1209,7 @@ class TestGetChartDataApi(BaseTestChartDataApi):
         }
         mock_fetch_query_context_from_sidecar.return_value = sidecar_query_context
         mock_create_query_context_from_form.return_value = mock.MagicMock()
+        mock_validate.return_value = None
         mock_get_data_response.return_value = Response(
             response="{}",
             status=200,
@@ -1237,7 +1238,7 @@ class TestGetChartDataApi(BaseTestChartDataApi):
         self,
         mock_fetch_query_context_from_sidecar,
         mock_create_query_context_from_form,
-        _mock_validate,
+        mock_validate,
         mock_get_data_response,
     ):
         chart = db.session.query(Slice).filter_by(slice_name="Genders").one()
@@ -1262,6 +1263,7 @@ class TestGetChartDataApi(BaseTestChartDataApi):
         }
         mock_fetch_query_context_from_sidecar.return_value = refreshed_query_context
         mock_create_query_context_from_form.return_value = mock.MagicMock()
+        mock_validate.return_value = None
         mock_get_data_response.return_value = Response(
             response="{}",
             status=200,

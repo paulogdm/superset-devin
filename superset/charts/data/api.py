@@ -69,7 +69,7 @@ from superset.utils.core import (
     DatasourceType,
     get_user_id,
 )
-from superset.utils.decorators import logs_context
+from superset.utils.decorators import logs_context, transaction
 from superset.views.base import CsvResponse, generate_download_headers, XlsxResponse
 from superset.views.base_api import statsd_metrics
 
@@ -89,6 +89,7 @@ class ChartDataRestApi(ChartRestApi):
 
     @expose("/<int:pk>/data/", methods=("GET",))
     @protect()
+    @transaction()
     @statsd_metrics
     @event_logger.log_this_with_context(
         action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.data",
@@ -206,7 +207,7 @@ class ChartDataRestApi(ChartRestApi):
 
             chart.query_context = json.dumps(json_body)
             chart.last_saved_at = datetime.now()
-            db.session.commit()
+            db.session.flush()
 
         # override saved query context
         json_body["result_format"] = request.args.get(

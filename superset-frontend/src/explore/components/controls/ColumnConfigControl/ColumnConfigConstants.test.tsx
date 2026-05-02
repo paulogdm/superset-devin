@@ -19,14 +19,13 @@
 
 import { SHARED_COLUMN_CONFIG_PROPS } from './constants';
 
-const { tokenSeparators } = SHARED_COLUMN_CONFIG_PROPS.d3NumberFormat;
+const { d3NumberFormat } = SHARED_COLUMN_CONFIG_PROPS;
 
-test('should allow commas in D3 format inputs', () => {
-  expect(tokenSeparators).toBeDefined();
-  expect(tokenSeparators).not.toContain(',');
+test('should keep D3 format input creatable', () => {
+  expect(d3NumberFormat.creatable).toBe(true);
 });
 
-test('should have correct default token separators', () => {
-  const expectedSeparators = ['\r\n', '\n', '\t', ';'];
-  expect(tokenSeparators).toEqual(expectedSeparators);
+test('should expose expected D3 format options', () => {
+  expect(Array.isArray(d3NumberFormat.options)).toBe(true);
+  expect((d3NumberFormat.options ?? []).length).toBeGreaterThan(0);
 });

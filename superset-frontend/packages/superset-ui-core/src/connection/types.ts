@@ -160,6 +160,7 @@ export interface SupersetClientInterface extends Pick<
   | 'getGuestToken'
   | 'getUrl'
 > {
+  getUrl: SupersetClientClass['getUrl'];
   configure: (config?: ClientConfig) => SupersetClientInterface;
   reset: () => void;
   getCSRFToken: () => CsrfPromise;
