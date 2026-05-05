@@ -37,6 +37,7 @@ from superset.charts.data.dashboard_filter_context import (
 )
 from superset.charts.data.query_context_cache_loader import QueryContextCacheLoader
 from superset.charts.data.query_context_sidecar import (
+    DEFAULT_QUERY_CONTEXT_SIDECAR_TIMEOUT,
     fetch_query_context_from_sidecar,
     QueryContextSidecarError,
 )
@@ -78,7 +79,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_QUERY_CONTEXT_SIDECAR_TIMEOUT = 30
 MISSING_QUERY_CONTEXT_MESSAGE = (
     "Chart has no query context saved. Please save the chart again."
 )

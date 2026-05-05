@@ -16,6 +16,7 @@
 # under the License.
 from __future__ import annotations
 
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -23,6 +24,7 @@ import requests
 
 from superset.charts.data.query_context_sidecar import (
     fetch_query_context_from_sidecar,
+    maybe_generate_query_context,
     QueryContextSidecarError,
 )
 
@@ -85,3 +87,128 @@ def test_fetch_query_context_from_sidecar_invalid_payload(
             form_data={"viz_type": "pie"},
             timeout=15,
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests for maybe_generate_query_context
+# ---------------------------------------------------------------------------
+
+
+class _FakeApp:
+    """Minimal stand-in for the Flask app proxy used by the sidecar module."""
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        self.config = config or {}
+
+
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.app",
+    new=_FakeApp({}),
+)
+def test_maybe_generate_noop_when_no_sidecar_url() -> None:
+    model = mock.MagicMock()
+    maybe_generate_query_context(model, '{"viz_type": "pie"}')
+
+
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.app",
+    new=_FakeApp({"QUERY_CONTEXT_SIDECAR_URL": "http://sidecar.internal"}),
+)
+def test_maybe_generate_noop_when_params_json_is_none() -> None:
+    model = mock.MagicMock()
+    maybe_generate_query_context(model, None)
+
+
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.fetch_query_context_from_sidecar"
+)
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.app",
+    new=_FakeApp(
+        {
+            "QUERY_CONTEXT_SIDECAR_URL": "http://sidecar.internal",
+            "QUERY_CONTEXT_SIDECAR_TIMEOUT": 10,
+        }
+    ),
+)
+def test_maybe_generate_sets_query_context_on_success(
+    mock_fetch: mock.MagicMock,
+) -> None:
+    mock_fetch.return_value = {"datasource": {"id": 1}, "queries": []}
+    model = mock.MagicMock()
+
+    maybe_generate_query_context(model, '{"viz_type": "pie"}')
+
+    mock_fetch.assert_called_once_with(
+        sidecar_url="http://sidecar.internal",
+        form_data={"viz_type": "pie"},
+        timeout=10,
+    )
+    assert model.query_context is not None
+
+
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.fetch_query_context_from_sidecar"
+)
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.app",
+    new=_FakeApp(
+        {
+            "QUERY_CONTEXT_SIDECAR_URL": "http://sidecar.internal",
+            "QUERY_CONTEXT_SIDECAR_TIMEOUT": 10,
+        }
+    ),
+)
+def test_maybe_generate_logs_on_sidecar_error(
+    mock_fetch: mock.MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    mock_fetch.side_effect = QueryContextSidecarError("boom")
+    model = mock.MagicMock()
+    model.id = 42
+
+    with caplog.at_level("WARNING"):
+        maybe_generate_query_context(model, '{"viz_type": "pie"}')
+
+    assert "Failed to generate query context" in caplog.text
+
+
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.app",
+    new=_FakeApp({"QUERY_CONTEXT_SIDECAR_URL": "http://sidecar.internal"}),
+)
+def test_maybe_generate_logs_on_invalid_json(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    model = mock.MagicMock()
+
+    with caplog.at_level("WARNING"):
+        maybe_generate_query_context(model, "not-valid-json{{{")
+
+    assert "Could not parse chart params" in caplog.text
+
+
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.fetch_query_context_from_sidecar"
+)
+@mock.patch(
+    "superset.charts.data.query_context_sidecar.app",
+    new=_FakeApp(
+        {
+            "QUERY_CONTEXT_SIDECAR_URL": "http://sidecar.internal",
+            "QUERY_CONTEXT_SIDECAR_TIMEOUT": 10,
+        }
+    ),
+)
+def test_maybe_generate_logs_on_unexpected_error(
+    mock_fetch: mock.MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    mock_fetch.side_effect = RuntimeError("unexpected")
+    model = mock.MagicMock()
+    model.id = 99
+
+    with caplog.at_level("WARNING"):
+        maybe_generate_query_context(model, '{"viz_type": "pie"}')
+
+    assert "Unexpected error" in caplog.text

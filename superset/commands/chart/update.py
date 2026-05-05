@@ -24,6 +24,7 @@ from flask_appbuilder.models.sqla import Model
 from marshmallow import ValidationError
 
 from superset import security_manager
+from superset.charts.data.query_context_sidecar import maybe_generate_query_context
 from superset.commands.base import BaseCommand, UpdateMixin
 from superset.commands.chart.exceptions import (
     ChartForbiddenError,
@@ -70,7 +71,16 @@ class UpdateChartCommand(UpdateMixin, BaseCommand):
             self._properties["last_saved_at"] = datetime.now()
             self._properties["last_saved_by"] = g.user
 
-        return ChartDAO.update(self._model, self._properties)
+        chart = ChartDAO.update(self._model, self._properties)
+
+        if (
+            "params" in self._properties
+            and not self._properties.get("query_context")
+            and not self._properties.get("query_context_generation")
+        ):
+            maybe_generate_query_context(chart, self._properties["params"])
+
+        return chart
 
     def _validate_new_dashboard_access(
         self, requested_dashboards: list[Dashboard], exceptions: list[Exception]

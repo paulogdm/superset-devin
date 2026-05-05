@@ -24,6 +24,7 @@ from flask_appbuilder.models.sqla import Model
 from marshmallow import ValidationError
 
 from superset import security_manager
+from superset.charts.data.query_context_sidecar import maybe_generate_query_context
 from superset.commands.base import BaseCommand, CreateMixin
 from superset.commands.chart.exceptions import (
     ChartCreateFailedError,
@@ -48,7 +49,12 @@ class CreateChartCommand(CreateMixin, BaseCommand):
         self.validate()
         self._properties["last_saved_at"] = datetime.now()
         self._properties["last_saved_by"] = g.user
-        return ChartDAO.create(attributes=self._properties)
+        chart = ChartDAO.create(attributes=self._properties)
+
+        if not self._properties.get("query_context"):
+            maybe_generate_query_context(chart, self._properties.get("params"))
+
+        return chart
 
     def validate(self) -> None:
         exceptions = []

@@ -16,13 +16,62 @@
 # under the License.
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import requests
+from flask import current_app as app
+
+from superset.utils import json
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_QUERY_CONTEXT_SIDECAR_TIMEOUT = 30
 
 
 class QueryContextSidecarError(Exception):
     """Raised when query context cannot be generated via sidecar."""
+
+
+def maybe_generate_query_context(model: Any, params_json: str | None) -> None:
+    """Best-effort generation of query_context via the sidecar service.
+
+    Sets ``model.query_context`` on success.  Failures are logged but never
+    re-raised so chart saves are not blocked.
+    """
+    sidecar_url = app.config.get("QUERY_CONTEXT_SIDECAR_URL")
+    if not sidecar_url or not params_json:
+        return
+
+    try:
+        form_data = json.loads(params_json)
+    except (TypeError, json.JSONDecodeError):
+        logger.warning("Could not parse chart params for sidecar query context")
+        return
+
+    timeout = app.config.get(
+        "QUERY_CONTEXT_SIDECAR_TIMEOUT",
+        DEFAULT_QUERY_CONTEXT_SIDECAR_TIMEOUT,
+    )
+
+    try:
+        result = fetch_query_context_from_sidecar(
+            sidecar_url=sidecar_url,
+            form_data=form_data,
+            timeout=timeout,
+        )
+        model.query_context = json.dumps(result)
+    except QueryContextSidecarError:
+        logger.warning(
+            "Failed to generate query context via sidecar for chart %s",
+            getattr(model, "id", "?"),
+        )
+    except Exception:
+        logger.warning(
+            "Unexpected error generating query context via sidecar for chart %s",
+            getattr(model, "id", "?"),
+            exc_info=True,
+        )
 
 
 def fetch_query_context_from_sidecar(
