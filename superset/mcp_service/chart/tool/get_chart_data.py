@@ -67,24 +67,33 @@ _GENERIC_TYPE_MAP: dict[int, str] = {
 # avoid recommending a chart type the user already has.
 _VIZ_CATEGORY: dict[str, str] = {
     "echarts_timeseries_line": "line",
+    "echarts_timeseries_smooth": "line",
+    "echarts_timeseries_step": "line",
+    "echarts_timeseries": "line",
     "echarts_timeseries_bar": "bar",
     "echarts_area": "area",
     "echarts_timeseries_scatter": "scatter",
+    "mixed_timeseries": "line",
     "table": "table",
     "pie": "pie",
     "big_number": "kpi",
     "big_number_total": "kpi",
+    "pop_kpi": "kpi",
     "dist_bar": "bar",
     "line": "line",
     "area": "area",
     "scatter": "scatter",
     "bubble": "bubble",
     "treemap_v2": "treemap",
+    "sunburst_v2": "treemap",
     "heatmap_v2": "heatmap",
     "gauge_chart": "gauge",
+    "funnel": "funnel",
     "histogram": "histogram",
+    "histogram_v2": "histogram",
     "box_plot": "box_plot",
     "world_map": "map",
+    "pivot_table_v2": "table",
 }
 
 _MAX_RECOMMENDATIONS = 4
@@ -117,39 +126,63 @@ def _build_candidates(
     """Build candidate visualization list from column metadata."""
     temporal = [c for c in columns if c.data_type == "temporal"]
     numeric = [c for c in columns if c.data_type == "numeric"]
-    categorical = [
-        c
-        for c in columns
-        if c.data_type in ("string", "boolean")
-        and (
-            c.unique_count <= 20 or (row_count > 0 and c.unique_count / row_count < 0.5)
-        )
-    ]
-
-    candidates: list[str] = []
+    categorical = [c for c in columns if c.data_type in ("string", "boolean")]
 
     if temporal and numeric:
-        candidates.append("line chart")
-        candidates.append("area chart")
-        candidates.append("bar chart")
+        return _candidates_temporal_numeric(numeric, row_count)
+    if categorical and numeric:
+        return _candidates_categorical_numeric(numeric, categorical)
+    if len(numeric) >= 2:
+        return _candidates_multi_numeric(numeric, categorical)
+    if len(numeric) == 1 and not temporal and not categorical:
+        return _candidates_single_numeric(numeric[0], row_count)
+    return []
+
+
+def _candidates_temporal_numeric(
+    numeric: list[DataColumn], row_count: int
+) -> list[str]:
+    # Few data points are better as a bar chart than a line
+    if row_count < 5:
+        candidates = ["bar chart", "table"]
+    else:
+        candidates = ["line chart", "area chart", "bar chart"]
         if len(numeric) > 1:
             candidates.append("multi-line chart")
-    elif categorical and numeric:
-        candidates.append("bar chart")
-        if len(numeric) == 1 and categorical and categorical[0].unique_count <= 10:
-            candidates.append("pie chart")
-        if any(c.unique_count > 5 for c in categorical):
-            candidates.append("treemap")
-    elif len(numeric) >= 2:
-        candidates.append("scatter plot")
-        if len(numeric) >= 3:
-            candidates.append("bubble chart")
-        if categorical:
-            candidates.append("heatmap")
-    elif len(numeric) == 1 and not temporal and not categorical:
-        candidates.append("big number / KPI")
-        candidates.append("gauge chart")
+    return candidates
 
+
+def _candidates_categorical_numeric(
+    numeric: list[DataColumn],
+    categorical: list[DataColumn],
+) -> list[str]:
+    candidates = ["bar chart"]
+    if len(numeric) == 1 and categorical[0].unique_count <= 10:
+        candidates.append("pie chart")
+    if len(numeric) >= 2:
+        candidates.append("scatter plot")
+        candidates.append("heatmap")
+    if any(c.unique_count > 5 for c in categorical):
+        candidates.append("treemap")
+    return candidates
+
+
+def _candidates_single_numeric(col: DataColumn, row_count: int) -> list[str]:
+    candidates = ["big number / KPI", "gauge chart"]
+    if row_count > 20 and col.unique_count > 10:
+        candidates.insert(0, "histogram")
+    return candidates
+
+
+def _candidates_multi_numeric(
+    numeric: list[DataColumn],
+    categorical: list[DataColumn],
+) -> list[str]:
+    candidates = ["scatter plot"]
+    if len(numeric) >= 3:
+        candidates.append("bubble chart")
+    if categorical:
+        candidates.append("heatmap")
     return candidates
 
 
@@ -167,6 +200,7 @@ _CANDIDATE_CATEGORY: dict[str, str] = {
     "heatmap": "heatmap",
     "big number / KPI": "kpi",
     "gauge chart": "gauge",
+    "histogram": "histogram",
     "table": "table",
 }
 
@@ -769,10 +803,10 @@ async def get_chart_data(  # noqa: C901
                 if idx < len(coltypes):
                     data_type = _GENERIC_TYPE_MAP.get(coltypes[idx], "string")
                 elif sample_values:
-                    if all(isinstance(v, (int, float)) for v in sample_values):
-                        data_type = "numeric"
-                    elif all(isinstance(v, bool) for v in sample_values):
+                    if all(isinstance(v, bool) for v in sample_values):
                         data_type = "boolean"
+                    elif all(isinstance(v, (int, float)) for v in sample_values):
+                        data_type = "numeric"
 
                 columns.append(
                     DataColumn(
