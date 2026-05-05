@@ -301,7 +301,16 @@ class WebDriverPlaywright(WebDriverProxy):
                         "Wait for loading element of charts to be gone at url: %s", url
                     )
                     page.wait_for_function(
-                        "() => document.querySelectorAll('.loading').length === 0",
+                        """() => {
+                            const els = document.querySelectorAll('.loading');
+                            for (const el of els) {
+                                const r = el.getBoundingClientRect();
+                                if (r.top < window.innerHeight && r.bottom > 0) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }""",
                         timeout=self._screenshot_load_wait * 1000,
                     )
                 except PlaywrightTimeout:
@@ -368,7 +377,12 @@ class WebDriverPlaywright(WebDriverProxy):
                         page.set_viewport_size(
                             {"height": tile_height, "width": viewport_width}
                         )
-                        img = take_tiled_screenshot(page, element_name, tile_height)
+                        img = take_tiled_screenshot(
+                            page,
+                            element_name,
+                            tile_height,
+                            load_wait=self._screenshot_load_wait,
+                        )
                         if img is None:
                             logger.warning(
                                 (
