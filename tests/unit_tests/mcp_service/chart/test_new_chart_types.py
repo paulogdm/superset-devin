@@ -212,6 +212,18 @@ class TestMapPieConfig:
         assert result["adhoc_filters"][0]["operator"] == "=="
         assert result["adhoc_filters"][0]["comparator"] == "US"
 
+    def test_pie_form_data_color_scheme_override(self) -> None:
+        """Explicit color_scheme overrides the supersetColors default."""
+        config = PieChartConfig(
+            chart_type="pie",
+            dimension=ColumnRef(name="product"),
+            metric=ColumnRef(name="revenue", aggregate="SUM"),
+            color_scheme="googleCategory10c",
+        )
+        result = map_pie_config(config)
+
+        assert result["color_scheme"] == "googleCategory10c"
+
     def test_pie_form_data_custom_options(self) -> None:
         config = PieChartConfig(
             chart_type="pie",

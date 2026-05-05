@@ -542,6 +542,12 @@ def add_legend_config(form_data: Dict[str, Any], config: XYChartConfig) -> None:
             form_data["legend_orientation"] = config.legend.position
 
 
+def add_color_scheme(form_data: Dict[str, Any], config: XYChartConfig) -> None:
+    """Add color scheme to form_data when set."""
+    if config.color_scheme:
+        form_data["color_scheme"] = config.color_scheme
+
+
 def add_orientation_config(form_data: Dict[str, Any], config: XYChartConfig) -> None:
     """Add orientation configuration to form_data for bar charts.
 
@@ -714,6 +720,7 @@ def map_xy_config(
     add_axis_config(form_data, config)
     add_legend_config(form_data, config)
     add_orientation_config(form_data, config)
+    add_color_scheme(form_data, config)
 
     return form_data
 
@@ -726,7 +733,7 @@ def map_pie_config(config: PieChartConfig) -> Dict[str, Any]:
         "viz_type": "pie",
         "groupby": [config.dimension.name],
         "metric": metric,
-        "color_scheme": "supersetColors",
+        "color_scheme": config.color_scheme or "supersetColors",
         "show_labels": config.show_labels,
         "show_legend": config.show_legend,
         "label_type": config.label_type,

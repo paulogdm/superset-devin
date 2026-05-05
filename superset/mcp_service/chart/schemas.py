@@ -838,6 +838,14 @@ class PieChartConfig(UnknownFieldCheckMixin):
     )
     row_limit: int = Field(100, description="Max slices", ge=1, le=10000)
     number_format: str = Field("SMART_NUMBER", max_length=50)
+    color_scheme: str | None = Field(
+        None,
+        description=(
+            "Superset color scheme ID (e.g. 'supersetColors', 'lyftColors', "
+            "'googleCategory10c', 'd3Category10'). Defaults to 'supersetColors'."
+        ),
+        max_length=100,
+    )
     show_total: bool = Field(False, description="Show total in center")
     labels_outside: bool = True
     outer_radius: int = Field(70, description="Outer radius % (1-100)", ge=1, le=100)
@@ -1275,6 +1283,15 @@ class XYChartConfig(UnknownFieldCheckMixin):
     x_axis: AxisConfig | None = None
     y_axis: AxisConfig | None = None
     legend: LegendConfig | None = None
+    color_scheme: str | None = Field(
+        None,
+        description=(
+            "Superset color scheme ID (e.g. 'supersetColors', 'lyftColors', "
+            "'googleCategory10c', 'd3Category10'). When omitted, Superset's "
+            "default scheme is used."
+        ),
+        max_length=100,
+    )
     filters: List[FilterConfig] | None = Field(
         None,
         description="Structured filters (column/op/value). "
