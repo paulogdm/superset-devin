@@ -26,6 +26,7 @@ import {
   userEvent,
   within,
   waitFor,
+  fireEvent,
 } from 'spec/helpers/testing-library';
 import { getExtensionsRegistry } from '@superset-ui/core';
 import setupCodeOverrides from 'src/setup/setupCodeOverrides';
@@ -435,7 +436,11 @@ describe('DatabaseModal', () => {
       userEvent.click(selectInput);
 
       // Simulate pasting text into the input
-      expect(() => userEvent.paste(selectInput, 'post')).not.toThrow();
+      expect(() =>
+        fireEvent.paste(selectInput, {
+          clipboardData: { getData: () => 'post' },
+        }),
+      ).not.toThrow();
     });
 
     test('renders the "Basic" tab of SQL Alchemy form (step 2 of 2) correctly', async () => {
@@ -1207,7 +1212,9 @@ describe('DatabaseModal', () => {
             'ssh-tunnel-server_address-input',
           );
           expect(SSHTunnelServerAddressInput).toHaveValue('');
-          userEvent.type(SSHTunnelServerAddressInput, 'localhost');
+          fireEvent.change(SSHTunnelServerAddressInput, {
+            target: { value: 'localhost' },
+          });
           await waitFor(() =>
             expect(SSHTunnelServerAddressInput).toHaveValue('localhost'),
           );
@@ -1215,13 +1222,17 @@ describe('DatabaseModal', () => {
             'ssh-tunnel-server_port-input',
           );
           expect(SSHTunnelServerPortInput).toHaveValue(null);
-          userEvent.type(SSHTunnelServerPortInput, '22');
+          fireEvent.change(SSHTunnelServerPortInput, {
+            target: { value: '22' },
+          });
           await waitFor(() => expect(SSHTunnelServerPortInput).toHaveValue(22));
           const SSHTunnelUsernameInput = screen.getByTestId(
             'ssh-tunnel-username-input',
           );
           expect(SSHTunnelUsernameInput).toHaveValue('');
-          userEvent.type(SSHTunnelUsernameInput, 'test');
+          fireEvent.change(SSHTunnelUsernameInput, {
+            target: { value: 'test' },
+          });
           await waitFor(() =>
             expect(SSHTunnelUsernameInput).toHaveValue('test'),
           );
@@ -1229,7 +1240,9 @@ describe('DatabaseModal', () => {
             'ssh-tunnel-password-input',
           );
           expect(SSHTunnelPasswordInput).toHaveValue('');
-          userEvent.type(SSHTunnelPasswordInput, 'pass');
+          fireEvent.change(SSHTunnelPasswordInput, {
+            target: { value: 'pass' },
+          });
           await waitFor(() =>
             expect(SSHTunnelPasswordInput).toHaveValue('pass'),
           );
@@ -1251,7 +1264,9 @@ describe('DatabaseModal', () => {
             'ssh-tunnel-server_address-input',
           );
           expect(SSHTunnelServerAddressInput).toHaveValue('');
-          userEvent.type(SSHTunnelServerAddressInput, 'localhost');
+          fireEvent.change(SSHTunnelServerAddressInput, {
+            target: { value: 'localhost' },
+          });
           await waitFor(() =>
             expect(SSHTunnelServerAddressInput).toHaveValue('localhost'),
           );
@@ -1259,13 +1274,17 @@ describe('DatabaseModal', () => {
             'ssh-tunnel-server_port-input',
           );
           expect(SSHTunnelServerPortInput).toHaveValue(null);
-          userEvent.type(SSHTunnelServerPortInput, '22');
+          fireEvent.change(SSHTunnelServerPortInput, {
+            target: { value: '22' },
+          });
           await waitFor(() => expect(SSHTunnelServerPortInput).toHaveValue(22));
           const SSHTunnelUsernameInput = screen.getByTestId(
             'ssh-tunnel-username-input',
           );
           expect(SSHTunnelUsernameInput).toHaveValue('');
-          userEvent.type(SSHTunnelUsernameInput, 'test');
+          fireEvent.change(SSHTunnelUsernameInput, {
+            target: { value: 'test' },
+          });
           await waitFor(() =>
             expect(SSHTunnelUsernameInput).toHaveValue('test'),
           );
@@ -1273,7 +1292,9 @@ describe('DatabaseModal', () => {
             'ssh-tunnel-password-input',
           );
           expect(SSHTunnelPasswordInput).toHaveValue('');
-          userEvent.type(SSHTunnelPasswordInput, 'pass');
+          fireEvent.change(SSHTunnelPasswordInput, {
+            target: { value: 'pass' },
+          });
           await waitFor(() =>
             expect(SSHTunnelPasswordInput).toHaveValue('pass'),
           );
@@ -1390,16 +1411,16 @@ describe('DatabaseModal', () => {
 
         expect(connectButton).toBeDisabled();
 
-        userEvent.type(hostField, 'localhost');
-        userEvent.tab();
-        userEvent.type(portField, '5432');
-        userEvent.tab();
-        userEvent.type(databaseNameField, 'postgres');
-        userEvent.tab();
-        userEvent.type(usernameField, 'testdb');
-        userEvent.tab();
-        userEvent.type(passwordField, 'demoPassword');
-        userEvent.tab();
+        fireEvent.change(hostField, { target: { value: 'localhost' } });
+        fireEvent.blur(hostField);
+        fireEvent.change(portField, { target: { value: '5432' } });
+        fireEvent.blur(portField);
+        fireEvent.change(databaseNameField, { target: { value: 'postgres' } });
+        fireEvent.blur(databaseNameField);
+        fireEvent.change(usernameField, { target: { value: 'testdb' } });
+        fireEvent.blur(usernameField);
+        fireEvent.change(passwordField, { target: { value: 'demoPassword' } });
+        fireEvent.blur(passwordField);
 
         await waitFor(() => expect(connectButton).toBeEnabled());
 
@@ -1436,8 +1457,8 @@ describe('DatabaseModal', () => {
         const hostField = textboxes[0];
 
         // Type a value and blur - should trigger validation
-        userEvent.type(hostField, 'localhost');
-        userEvent.tab();
+        fireEvent.change(hostField, { target: { value: 'localhost' } });
+        fireEvent.blur(hostField);
 
         await waitFor(() => {
           expect(
@@ -1446,8 +1467,8 @@ describe('DatabaseModal', () => {
         });
 
         // Blur again without changing the value - should NOT trigger another validation
-        userEvent.click(hostField);
-        userEvent.tab();
+        fireEvent.focus(hostField);
+        fireEvent.blur(hostField);
 
         // Wait a tick to ensure no additional calls are made
         await waitFor(() => {
