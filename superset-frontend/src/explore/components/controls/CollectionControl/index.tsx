@@ -17,7 +17,7 @@
  * under the License.
  */
 import React, { useCallback, useMemo } from 'react';
-import { IconTooltip, List } from '@superset-ui/core/components';
+import { Button, IconTooltip, List } from '@superset-ui/core/components';
 import { nanoid } from 'nanoid';
 import { t } from '@apache-superset/core/translation';
 import { useTheme, type SupersetTheme } from '@apache-superset/core/theme';
@@ -124,29 +124,18 @@ function SortableItem({
         paddingInline: theme.sizeUnit * 6,
       })}
     >
-      <button
-        type="button"
-        ref={setActivatorNodeRef}
-        aria-label={t('Drag to reorder')}
-        css={(theme: SupersetTheme) => ({
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          color: 'inherit',
-          cursor: 'ns-resize',
-          display: 'inline-flex',
-          alignItems: 'center',
-          '&:focus-visible': {
-            outline: `2px solid ${theme.colorPrimary}`,
-            outlineOffset: 2,
-          },
-        })}
-        {...attributes}
-        {...listeners}
-      >
-        <DragHandle />
-      </button>
+      <span ref={setActivatorNodeRef} css={{ display: 'inline-flex' }}>
+        <Button
+          type="text"
+          aria-label={t('Drag to reorder')}
+          icon={<DragHandle />}
+          css={{
+            cursor: 'ns-resize',
+          }}
+          {...attributes}
+          {...listeners}
+        />
+      </span>
       <div
         css={(theme: SupersetTheme) => ({
           flex: 1,
