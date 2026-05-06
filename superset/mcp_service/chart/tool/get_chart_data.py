@@ -800,7 +800,7 @@ async def get_chart_data(  # noqa: C901
                 # Use SQL-derived GenericDataType when available,
                 # fall back to Python isinstance heuristic
                 data_type = "string"
-                if idx < len(coltypes):
+                if coltypes:
                     data_type = _GENERIC_TYPE_MAP.get(coltypes[idx], "string")
                 elif sample_values:
                     if all(isinstance(v, bool) for v in sample_values):

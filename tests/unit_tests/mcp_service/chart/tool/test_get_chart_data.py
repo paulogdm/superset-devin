@@ -30,12 +30,14 @@ from superset.mcp_service.chart.schemas import (
     PerformanceMetadata,
 )
 from superset.mcp_service.chart.tool.get_chart_data import (
+    _GENERIC_TYPE_MAP,
     _MAX_RECOMMENDATIONS,
     _recommend_visualizations,
     _sanitize_chart_data_for_llm_context,
 )
 from superset.mcp_service.utils import sanitize_for_llm_context
 from superset.mcp_service.utils.sanitization import LLM_CONTEXT_ESCAPED_CLOSE_DELIMITER
+from superset.utils.core import GenericDataType
 
 
 def _collect_groupby_extras(
@@ -1099,9 +1101,6 @@ def test_recommend_single_numeric_high_cardinality_suggests_histogram():
 
 def test_coltypes_populates_data_type():
     """Verify that GenericDataType values from coltypes are mapped correctly."""
-    from superset.mcp_service.chart.tool.get_chart_data import _GENERIC_TYPE_MAP
-    from superset.utils.core import GenericDataType
-
     assert _GENERIC_TYPE_MAP[GenericDataType.NUMERIC] == "numeric"
     assert _GENERIC_TYPE_MAP[GenericDataType.STRING] == "string"
     assert _GENERIC_TYPE_MAP[GenericDataType.TEMPORAL] == "temporal"
