@@ -470,3 +470,97 @@ def test_get_ssh_tunnel_errors_skipped_when_not_enabled(
     }
     command = ValidateDatabaseParametersCommand(properties)
     command.run()
+
+
+def test_bypass_engine_surfaces_ssh_tunnel_errors(mocker: MockerFixture) -> None:
+    """
+    Bypass engines also surface SSH tunnel field errors so the progressive
+    validation flow stays consistent across engine types.
+    """
+    mocker.patch(
+        "superset.commands.database.validate.is_feature_enabled",
+        return_value=True,
+    )
+    DatabaseDAO = mocker.patch(  # noqa: N806
+        "superset.commands.database.validate.DatabaseDAO"
+    )
+    DatabaseDAO.validate_uniqueness.return_value = True
+
+    properties = {
+        "engine": "snowflake",
+        "database_name": "ok",
+        "parameters": {"port": 443},
+        "ssh_tunnel": {"server_address": "ssh.example.com"},
+    }
+    command = ValidateDatabaseParametersCommand(properties)
+    with pytest.raises(InvalidParametersError) as excinfo:
+        command.run()
+    assert any(
+        err.extra is not None and err.extra.get("ssh_tunnel") is True
+        for err in excinfo.value.errors
+    )
+
+
+def test_validate_ssh_tunnel_feature_disabled_via_parameters_ssh(
+    mocker: MockerFixture,
+) -> None:
+    """
+    The SSH feature-flag guard fires when the UI marks ``parameters.ssh``
+    even if ``ssh_tunnel`` itself is empty during progressive validation.
+    """
+    mocker.patch(
+        "superset.commands.database.validate.is_feature_enabled",
+        return_value=False,
+    )
+
+    properties = {
+        "engine": "postgresql",
+        "parameters": {"host": "localhost", "port": 5432, "ssh": True},
+        "ssh_tunnel": {},
+    }
+    command = ValidateDatabaseParametersCommand(properties)
+    with pytest.raises(SSHTunnelingNotEnabledError):
+        command.run()
+
+
+def test_ssh_tunnel_missing_message_is_interpolated(
+    mocker: MockerFixture,
+) -> None:
+    """
+    The translated ``parameters are missing`` message is interpolated with
+    the actual missing fields rather than the raw ``%(missing)s`` token.
+    """
+    mocker.patch(
+        "superset.commands.database.validate.is_feature_enabled",
+        return_value=True,
+    )
+    mocker.patch(
+        "superset.commands.database.validate.get_engine_spec",
+        return_value=mocker.MagicMock(
+            validate_parameters=mocker.MagicMock(return_value=[]),
+        ),
+    )
+
+    properties = {
+        "engine": "postgresql",
+        "parameters": {
+            "host": "localhost",
+            "port": 5432,
+            "username": "u",
+            "database": "d",
+        },
+        "ssh_tunnel": {"server_address": "ssh.example.com"},
+    }
+    command = ValidateDatabaseParametersCommand(properties)
+    with pytest.raises(InvalidParametersError) as excinfo:
+        command.run()
+    missing_field_messages = [
+        err.message
+        for err in excinfo.value.errors
+        if err.extra is not None
+        and err.extra.get("missing")
+        and err.extra.get("ssh_tunnel")  # noqa: E501
+    ]
+    assert missing_field_messages
+    assert all("%(missing)s" not in msg for msg in missing_field_messages)
+    assert any("server_port" in msg for msg in missing_field_messages)

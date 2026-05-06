@@ -54,9 +54,16 @@ class ValidateDatabaseParametersCommand(BaseCommand):
         driver = self._properties.get("driver")
 
         if engine in BYPASS_VALIDATION_ENGINES:
-            # Skip engines that are only validated onCreate
-            # But still validate database_name uniqueness
-            self._validate_database_name()
+            # Skip engines that are only validated onCreate, but still surface
+            # database_name uniqueness and SSH tunnel field errors so the
+            # progressive validation flow stays consistent across engines.
+            errors: list[SupersetError] = []
+            if database_name_error := self._get_database_name_error():
+                errors.append(database_name_error)
+            errors.extend(self._get_ssh_tunnel_errors())
+            if errors:
+                event_logger.log_with_context(action="validation_error", engine=engine)
+                raise InvalidParametersError(errors)
             return
 
         engine_spec = get_engine_spec(engine, driver)
@@ -178,11 +185,6 @@ class ValidateDatabaseParametersCommand(BaseCommand):
                 )
         return None
 
-    def _validate_database_name(self) -> None:
-        """Check for duplicate database name and raise if found."""
-        if error := self._get_database_name_error():
-            raise InvalidParametersError([error])
-
     def validate(self) -> None:
         """Load the model and validate SSH tunnel if enabled."""
         self._load_model()
@@ -190,14 +192,19 @@ class ValidateDatabaseParametersCommand(BaseCommand):
 
     def _validate_ssh_tunnel(self) -> None:
         """Validate SSH tunnel configuration if enabled."""
-        ssh_tunnel = self._properties.get("ssh_tunnel")
-        if ssh_tunnel:
-            if not is_feature_enabled("SSH_TUNNELING"):
-                raise SSHTunnelingNotEnabledError()
-            # Check if port is provided (required for SSH tunneling)
-            parameters = self._properties.get("parameters", {})
-            if not parameters.get("port"):
-                raise SSHTunnelDatabasePortError()
+        ssh_tunnel = self._properties.get("ssh_tunnel") or {}
+        parameters = self._properties.get("parameters") or {}
+        # SSH can be turned on via the dedicated tunnel payload OR the
+        # ``parameters.ssh`` flag the UI sets while the user is filling the
+        # form. Both paths must enforce the feature flag and the database
+        # port requirement.
+        ssh_enabled = bool(ssh_tunnel) or bool(parameters.get("ssh"))
+        if not ssh_enabled:
+            return
+        if not is_feature_enabled("SSH_TUNNELING"):
+            raise SSHTunnelingNotEnabledError()
+        if not parameters.get("port"):
+            raise SSHTunnelDatabasePortError()
 
     def _get_ssh_tunnel_errors(self) -> list[SupersetError]:
         """Validate SSH tunnel fields and return list of errors."""
@@ -219,7 +226,10 @@ class ValidateDatabaseParametersCommand(BaseCommand):
         if missing:
             errors.append(
                 SupersetError(
-                    message=__("One or more parameters are missing: %(missing)s"),
+                    message=__(
+                        "One or more parameters are missing: %(missing)s",
+                        missing=", ".join(missing),
+                    ),
                     error_type=SupersetErrorType.CONNECTION_MISSING_PARAMETERS_ERROR,
                     level=ErrorLevel.WARNING,
                     extra={"missing": missing, "ssh_tunnel": True},
@@ -244,7 +254,10 @@ class ValidateDatabaseParametersCommand(BaseCommand):
         if has_private_key and not ssh_tunnel.get("private_key_password"):
             errors.append(
                 SupersetError(
-                    message=__("One or more parameters are missing: %(missing)s"),
+                    message=__(
+                        "One or more parameters are missing: %(missing)s",
+                        missing="private_key_password",
+                    ),
                     error_type=SupersetErrorType.CONNECTION_MISSING_PARAMETERS_ERROR,
                     level=ErrorLevel.WARNING,
                     extra={"missing": ["private_key_password"], "ssh_tunnel": True},
