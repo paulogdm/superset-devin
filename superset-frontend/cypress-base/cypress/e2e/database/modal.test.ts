@@ -63,17 +63,22 @@ describe('Add database', () => {
   it('show error alerts on dynamic form for bad host', () => {
     cy.get('.preferred > :nth-child(1)').click();
 
-    cy.get('input[name="host"]').type('badhost', { force: true });
-    cy.get('input[name="port"]').type('5432', { force: true });
-    cy.get('input[name="username"]').type('testusername', { force: true });
-    cy.get('input[name="database"]').type('testdb', { force: true });
-    cy.get('input[name="password"]').type('testpass', { force: true });
-    cy.get('body').click(0, 0);
+    cy.get('input[name="host"]').type('badhost', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="port"]').type('5432', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="username"]')
+      .type('testusername', { force: true })
+      .blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="database"]').type('testdb', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="password"]').type('testpass', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
 
-    // Wait for all intermediate validation calls to settle, then check the button
-    cy.getBySel('btn-submit-connection').should('not.be.disabled', {
-      timeout: 60000,
-    });
+    cy.getBySel('btn-submit-connection', { timeout: 60000 }).should(
+      'not.be.disabled',
+    );
     cy.getBySel('btn-submit-connection').click({ force: true });
 
     cy.wait('@createDb', { timeout: 60000 }).then(() => {
@@ -87,17 +92,22 @@ describe('Add database', () => {
   it('show error alerts on dynamic form for bad port', () => {
     cy.get('.preferred > :nth-child(1)').click();
 
-    cy.get('input[name="host"]').type('localhost', { force: true });
-    cy.get('input[name="port"]').type('5430', { force: true });
-    cy.get('input[name="database"]').type('testdb', { force: true });
-    cy.get('input[name="username"]').type('testusername', { force: true });
-    cy.get('input[name="password"]').type('testpass', { force: true });
-    cy.get('body').click(0, 0);
+    cy.get('input[name="host"]').type('localhost', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="port"]').type('5430', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="database"]').type('testdb', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="username"]')
+      .type('testusername', { force: true })
+      .blur();
+    cy.wait('@validateParams', { timeout: 30000 });
+    cy.get('input[name="password"]').type('testpass', { force: true }).blur();
+    cy.wait('@validateParams', { timeout: 30000 });
 
-    // Wait for all intermediate validation calls to settle, then check the button
-    cy.getBySel('btn-submit-connection').should('not.be.disabled', {
-      timeout: 60000,
-    });
+    cy.getBySel('btn-submit-connection', { timeout: 60000 }).should(
+      'not.be.disabled',
+    );
     cy.getBySel('btn-submit-connection').click({ force: true });
 
     cy.wait('@createDb', { timeout: 60000 }).then(() => {
