@@ -356,19 +356,24 @@ class TestTakeTiledScreenshot:
         # Warning logged for each tile that timed out
         assert mock_logger.warning.call_count == 3
         mock_logger.warning.assert_any_call(
-            "Timed out waiting for visible spinners to clear on tile %s/%s",
+            "Timed out waiting for visible spinners to clear on tile %s/%s "
+            "(load_wait=%ss)",
             1,
             3,
+            30,
         )
 
-    def test_per_tile_non_timeout_exceptions_propagate(self, mock_page):
-        """Non-timeout exceptions from wait_for_function are not swallowed."""
+    def test_per_tile_non_timeout_exceptions_return_none(self, mock_page):
+        """Non-timeout exceptions from wait_for_function are caught by the outer
+        handler and return None rather than crashing the caller."""
         mock_page.wait_for_function.side_effect = RuntimeError("browser crashed")
 
-        with pytest.raises(RuntimeError, match="browser crashed"):
-            take_tiled_screenshot(
+        with patch("superset.utils.screenshot_utils.logger"):
+            result = take_tiled_screenshot(
                 mock_page, "dashboard", tile_height=2000, load_wait=30
             )
+
+        assert result is None
 
     def test_load_wait_default_is_sixty_seconds(self):
         """load_wait defaults to 60 to match SCREENSHOT_LOAD_WAIT config default."""
