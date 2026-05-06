@@ -211,7 +211,15 @@ def import_from_dict(data: dict[str, Any], sync: Optional[list[str]] = None) -> 
     if isinstance(data, dict):
         logger.info("Importing %d %s", len(data.get(DATABASES_KEY, [])), DATABASES_KEY)
         for database in data.get(DATABASES_KEY, []):
-            Database.import_from_dict(database, sync=sync)
+            # Re-apply ``sqlalchemy_uri`` via ``set_sqlalchemy_uri`` so that the
+            # password is extracted from the URI, encrypted into the ``password``
+            # column, and the stored URI is masked — matching the web UI
+            # behavior. The raw ``setattr`` inside ``import_from_dict`` would
+            # otherwise leave the password readable in clear text.
+            sqlalchemy_uri = database.get("sqlalchemy_uri")
+            imported = Database.import_from_dict(database, sync=sync)
+            if sqlalchemy_uri is not None:
+                imported.set_sqlalchemy_uri(sqlalchemy_uri)
     else:
         logger.info("Supplied object is not a dictionary.")
 
