@@ -909,7 +909,7 @@ export function useDatabaseValidation() {
           setIsValidating(false);
           setHasValidated(true);
         }
-        return {};
+        return null;
       }
     },
     [setValidationErrors],

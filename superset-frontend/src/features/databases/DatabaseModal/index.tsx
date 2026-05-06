@@ -823,13 +823,19 @@ const DatabaseModal: FunctionComponent<DatabaseModalProps> = ({
     [onChange, handleClearValidationErrors],
   );
 
-  const getBlurValidation = useCallback(() => {
+  const getBlurValidation = useCallback(async () => {
     const currentDbSnapshot = JSON.stringify(db);
     if (currentDbSnapshot === lastValidatedDbSnapshotRef.current) {
-      return Promise.resolve([]);
+      return [];
     }
-    lastValidatedDbSnapshotRef.current = currentDbSnapshot;
-    return getValidation(db);
+    const result = await getValidation(db);
+    // Only cache after a request that produced a usable response. ``null``
+    // signals an unexpected/network failure, in which case we leave the
+    // snapshot untouched so the next blur retries.
+    if (result !== null) {
+      lastValidatedDbSnapshotRef.current = currentDbSnapshot;
+    }
+    return result;
   }, [db, getValidation]);
 
   const onClose = () => {
