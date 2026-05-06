@@ -37,8 +37,39 @@ from superset.extensions import feature_flag_manager
 logger = logging.getLogger(__name__)
 
 
-# keys present in the standard export that are not needed
+# top-level keys present in the standard export that are not needed:
+# they are either rewritten on import or contain instance-specific values.
 REMOVE_KEYS = ["datasource_type", "datasource_name", "url_params"]
+
+# keys inside `params` that point at the source instance and are
+# overwritten on import (see `update_chart_config_dataset`).
+REMOVE_PARAMS_KEYS = ["datasource", "slice_id", "dashboards", "url_params"]
+
+
+def _strip_query_context_datasource(query_context: str | None) -> str | None:
+    """Remove instance-specific datasource references from a query_context.
+
+    The datasource id/type baked into ``query_context`` (top-level, queries,
+    and form_data) is rewritten on import via ``update_chart_config_dataset``,
+    so it is only noise in the export.
+    """
+    if not query_context:
+        return query_context
+    try:
+        parsed = json.loads(query_context)
+    except (json.JSONDecodeError, TypeError):
+        logger.info("Unable to decode `query_context` field: %s", query_context)
+        return query_context
+
+    parsed.pop("datasource", None)
+    if isinstance(parsed.get("form_data"), dict):
+        parsed["form_data"].pop("datasource", None)
+        parsed["form_data"].pop("slice_id", None)
+    for query in parsed.get("queries", []) or []:
+        if isinstance(query, dict):
+            query.pop("datasource", None)
+
+    return json.dumps(parsed)
 
 
 class ExportChartsCommand(ExportModelsCommand):
@@ -64,9 +95,18 @@ class ExportChartsCommand(ExportModelsCommand):
             key: value for key, value in payload.items() if key not in REMOVE_KEYS
         }
 
+        if payload.get("query_context"):
+            payload["query_context"] = _strip_query_context_datasource(
+                payload["query_context"]
+            )
+
         if payload.get("params"):
             try:
-                payload["params"] = json.loads(payload["params"])
+                params = json.loads(payload["params"])
+                if isinstance(params, dict):
+                    for key in REMOVE_PARAMS_KEYS:
+                        params.pop(key, None)
+                payload["params"] = params
             except json.JSONDecodeError:
                 logger.info("Unable to decode `params` field: %s", payload["params"])
 
