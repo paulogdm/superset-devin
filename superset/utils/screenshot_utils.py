@@ -97,7 +97,7 @@ def take_tiled_screenshot(
         page: Playwright page object
         element_name: CSS class name of the element to screenshot
         tile_height: Height of each tile in pixels
-        load_wait: Seconds to wait for charts to load per tile (default 30)
+        load_wait: Seconds to wait for charts to load per tile (default 60)
 
     Returns:
         Combined screenshot bytes or None if failed
@@ -167,9 +167,11 @@ def take_tiled_screenshot(
                 )
             except PlaywrightTimeout:
                 logger.warning(
-                    "Timed out waiting for visible spinners to clear on tile %s/%s",
+                    "Timed out waiting for visible spinners to clear on tile %s/%s "
+                    "(load_wait=%ss)",
                     i + 1,
                     num_tiles,
+                    load_wait,
                 )
 
             # Calculate what portion of the element we want to capture for this tile

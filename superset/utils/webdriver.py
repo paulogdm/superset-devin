@@ -315,7 +315,10 @@ class WebDriverPlaywright(WebDriverProxy):
                     )
                 except PlaywrightTimeout:
                     logger.warning(
-                        "Timed out waiting for charts to load at url %s", url
+                        "Timed out waiting for charts to load at url %s "
+                        "(SCREENSHOT_LOAD_WAIT=%ss)",
+                        url,
+                        self._screenshot_load_wait,
                     )
                     raise
 
