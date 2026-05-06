@@ -200,7 +200,10 @@ async def get_chart_data(  # noqa: C901
         if not chart:
             await ctx.warning("Chart not found: identifier=%s" % (request.identifier,))
             return ChartError(
-                error=f"No chart found with identifier: {request.identifier}",
+                error=(
+                    f"No chart found with identifier: {request.identifier}."
+                    " Use list_charts to get valid chart IDs."
+                ),
                 error_type="NotFound",
             )
 

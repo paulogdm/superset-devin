@@ -343,10 +343,12 @@ async def update_chart(  # noqa: C901
                     "error": {
                         "error_type": "NotFound",
                         "message": (
-                            f"No chart found with identifier: {request.identifier}"
+                            f"No chart found with identifier: {request.identifier}."
+                            " Use list_charts to get valid chart IDs."
                         ),
                         "details": (
-                            f"No chart found with identifier: {request.identifier}"
+                            f"No chart found with identifier: {request.identifier}."
+                            " Use list_charts to get valid chart IDs."
                         ),
                     },
                     "success": False,
