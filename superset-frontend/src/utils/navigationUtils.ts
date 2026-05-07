@@ -97,8 +97,7 @@ const NEW_TAB_FEATURES = 'noopener noreferrer';
  * so the safety property is checkable from this file alone — that's what
  * CodeQL needs to clear the dataflow alert on the sinks below.
  */
-const SAFE_NAVIGATION_URL_RE =
-  /^(?:\/(?!\/)|\/\/|https?:|ftp:|mailto:|tel:)/i;
+const SAFE_NAVIGATION_URL_RE = /^(?:\/(?!\/)|\/\/|https?:|ftp:|mailto:|tel:)/i;
 
 /**
  * Validate that `url` uses a navigation-safe shape. `ensureAppRoot` already
