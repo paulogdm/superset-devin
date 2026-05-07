@@ -46,13 +46,53 @@ import { ensureAppRoot } from './pathUtils';
 const NEW_TAB_FEATURES = 'noopener noreferrer';
 
 /**
+ * Schemes that are safe to feed to `window.location` / `window.open` /
+ * anchor `href`. Anything outside this allow-list (`javascript:`, `data:`,
+ * `vbscript:`, etc.) can execute script in the current origin and is
+ * rejected by {@link assertSafeNavigationUrl}.
+ *
+ * The first two alternatives match relative URLs:
+ *   - `^/(?!/)` — absolute path on this origin (`/foo`), but not a
+ *     protocol-relative URL (`//host`). Protocol-relative is matched by the
+ *     `\/\/` alternative instead.
+ *   - `\/\/`  — protocol-relative (`//cdn.example.com/foo`).
+ *
+ * Kept locally in `navigationUtils.ts` rather than imported from pathUtils
+ * so the safety property is checkable from this file alone — that's what
+ * CodeQL needs to clear the dataflow alert on the sinks below.
+ */
+const SAFE_NAVIGATION_URL_RE =
+  /^(?:\/(?!\/)|\/\/|https?:|ftp:|mailto:|tel:)/i;
+
+/**
+ * Validate that `url` uses a navigation-safe shape. `ensureAppRoot` already
+ * neutralises script-bearing schemes by prefixing them as relative paths
+ * (`javascript:alert(1)` → `/javascript:alert(1)`), but this assertion gives
+ * the property a single, locally-readable enforcement point and keeps the
+ * channel-3 sinks below from being flagged as untrusted-data flows.
+ */
+function assertSafeNavigationUrl(url: string): string {
+  if (!SAFE_NAVIGATION_URL_RE.test(url)) {
+    throw new Error(
+      `navigationUtils refused unsafe URL: only relative paths and ` +
+        `http(s):, ftp:, mailto:, tel: schemes are allowed.`,
+    );
+  }
+  return url;
+}
+
+/**
  * Open a router-relative path in a new browser tab.
  *
  * The path is automatically prefixed with the application root so the new tab
  * lands inside Superset on subdirectory deployments.
  */
 export function openInNewTab(path: string): void {
-  window.open(ensureAppRoot(path), '_blank', NEW_TAB_FEATURES);
+  window.open(
+    assertSafeNavigationUrl(ensureAppRoot(path)),
+    '_blank',
+    NEW_TAB_FEATURES,
+  );
 }
 
 /**
@@ -63,7 +103,7 @@ export function openInNewTab(path: string): void {
  * or when a hard reload is required.
  */
 export function redirect(path: string): void {
-  window.location.href = ensureAppRoot(path);
+  window.location.href = assertSafeNavigationUrl(ensureAppRoot(path));
 }
 
 /**
@@ -72,7 +112,7 @@ export function redirect(path: string): void {
  * through React Router's `history.replace`.
  */
 export function redirectReplace(path: string): void {
-  window.location.replace(ensureAppRoot(path));
+  window.location.replace(assertSafeNavigationUrl(ensureAppRoot(path)));
 }
 
 /**
@@ -81,7 +121,7 @@ export function redirectReplace(path: string): void {
  * to round-trip through external systems back to this Superset deployment.
  */
 export function getShareableUrl(path: string): string {
-  return `${window.location.origin}${ensureAppRoot(path)}`;
+  return `${window.location.origin}${assertSafeNavigationUrl(ensureAppRoot(path))}`;
 }
 
 /**
@@ -95,7 +135,10 @@ export function AppLink(
   props: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string },
 ): ReactElement {
   const { href, ...rest } = props;
-  return createElement('a', { ...rest, href: ensureAppRoot(href) });
+  return createElement('a', {
+    ...rest,
+    href: assertSafeNavigationUrl(ensureAppRoot(href)),
+  });
 }
 
 // =============================================================================
