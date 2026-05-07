@@ -44,12 +44,19 @@ Configuration:
 - MCP_DEV_USERNAME: Fallback username for development
 """
 
+import contextlib
+import functools
+import inspect
 import logging
+import types
 from contextlib import AbstractContextManager
 from typing import Any, Callable, TYPE_CHECKING, TypeVar
 
-from flask import g, has_request_context
+from fastmcp import Context as FMContext
+from flask import current_app, g, has_app_context, has_request_context
 from flask_appbuilder.security.sqla.models import Group, User
+from sqlalchemy.exc import DBAPIError, OperationalError
+from sqlalchemy.orm import joinedload
 
 if TYPE_CHECKING:
     from superset.connectors.sqla.models import SqlaTable
@@ -104,8 +111,6 @@ def check_tool_permission(func: Callable[..., Any]) -> bool:
         True if user has permission or no permission is required.
     """
     try:
-        from flask import current_app
-
         if not current_app.config.get("MCP_RBAC_ENABLED", True):
             return True
 
@@ -171,8 +176,6 @@ def load_user_with_relationships(
     """
     if not username and not email:
         raise ValueError("Either username or email must be provided")
-
-    from sqlalchemy.orm import joinedload
 
     from superset.extensions import db
 
@@ -330,8 +333,6 @@ def get_user_from_request() -> User:
     Raises:
         ValueError: If user cannot be authenticated or found
     """
-    from flask import current_app
-
     # Priority 1: JWT context (per-request safe via ContextVar)
     if (jwt_user := _resolve_user_from_jwt_context(current_app)) is not None:
         return jwt_user
@@ -445,12 +446,8 @@ def _setup_user_context() -> User | None:
     # tool calls when no per-request middleware refreshes it.
     # Only clear in app-context-only mode; preserve g.user when
     # a request context is active (external middleware set it).
-    from flask import has_request_context
-
     if not has_request_context():
         g.pop("user", None)
-
-    from sqlalchemy.exc import OperationalError
 
     user = None  # Ensure defined before loop in case of unexpected exit
 
@@ -535,8 +532,6 @@ def _remove_session_safe() -> None:
     The tool call still proceeds because a fresh connection will be obtained
     on the next DB access.
     """
-    from sqlalchemy.exc import DBAPIError
-
     from superset.extensions import db
 
     try:
@@ -571,12 +566,6 @@ def mcp_auth_hook(tool_func: F) -> F:  # noqa: C901
 
     Supports both sync and async tool functions.
     """
-    import contextlib
-    import functools
-    import inspect
-    import types
-
-    from flask import current_app, has_app_context, has_request_context
 
     def _get_app_context_manager() -> AbstractContextManager[None]:
         """Push a fresh app context unless a request context is active.
@@ -611,8 +600,6 @@ def mcp_auth_hook(tool_func: F) -> F:  # noqa: C901
 
     # Detect if the original function expects a ctx: Context parameter.
     # If so, we inject it via get_context() at call time.
-    from fastmcp import Context as FMContext
-
     _tool_sig = inspect.signature(tool_func)
     _needs_ctx = any(
         p.annotation is FMContext
