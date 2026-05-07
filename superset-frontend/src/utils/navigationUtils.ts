@@ -101,18 +101,16 @@ export function openInNewTab(path: string): void {
  * Unlike `history.push`, this triggers a full page load. Use it only when the
  * destination is outside the React Router tree (e.g. a backend-rendered page)
  * or when a hard reload is required.
+ *
+ * Implemented by delegating to {@link navigateTo} so the underlying
+ * `window.location.href` sink lives in one place — the long-standing
+ * `navigateTo` body — rather than being duplicated across this module.
+ *
+ * (A `redirectReplace` companion that wraps `window.location.replace` will
+ * be added in the same shape when the first migration site needs it.)
  */
 export function redirect(path: string): void {
-  window.location.href = assertSafeNavigationUrl(ensureAppRoot(path));
-}
-
-/**
- * Replace the current entry in `window.history` with a router-relative path.
- * No new history entry is pushed. Use sparingly — most navigation should go
- * through React Router's `history.replace`.
- */
-export function redirectReplace(path: string): void {
-  window.location.replace(assertSafeNavigationUrl(ensureAppRoot(path)));
+  navigateTo(path);
 }
 
 /**
@@ -150,10 +148,10 @@ export function AppLink(
 // the focused helpers, then delete these.
 // =============================================================================
 
-export const navigateTo = (
+export function navigateTo(
   url: string,
   options?: { newWindow?: boolean; assign?: boolean },
-) => {
+): void {
   if (options?.newWindow) {
     window.open(ensureAppRoot(url), '_blank', 'noopener noreferrer');
   } else if (options?.assign) {
@@ -161,16 +159,16 @@ export const navigateTo = (
   } else {
     window.location.href = ensureAppRoot(url);
   }
-};
+}
 
-export const navigateWithState = (
+export function navigateWithState(
   url: string,
   state: Record<string, unknown>,
   options?: { replace?: boolean },
-) => {
+): void {
   if (options?.replace) {
     window.history.replaceState(state, '', ensureAppRoot(url));
   } else {
     window.history.pushState(state, '', ensureAppRoot(url));
   }
-};
+}
