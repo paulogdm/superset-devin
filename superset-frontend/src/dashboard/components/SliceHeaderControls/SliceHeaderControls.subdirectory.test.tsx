@@ -143,6 +143,7 @@ describe('SliceHeaderControls — Cmd-click "Edit chart" under subdirectory depl
     expect(openSpy).toHaveBeenCalledWith(
       '/explore/?dashboard_page_id=abc&slice_id=371',
       '_blank',
+      'noopener noreferrer',
     );
   });
 
@@ -157,6 +158,7 @@ describe('SliceHeaderControls — Cmd-click "Edit chart" under subdirectory depl
     expect(openSpy).toHaveBeenCalledWith(
       '/superset/explore/?dashboard_page_id=abc&slice_id=371',
       '_blank',
+      'noopener noreferrer',
     );
   });
 });

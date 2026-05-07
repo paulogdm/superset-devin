@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import type { AnchorHTMLAttributes, ReactElement } from 'react';
+import { createElement, type AnchorHTMLAttributes, type ReactElement } from 'react';
 import { ensureAppRoot } from './pathUtils';
 
 // =============================================================================
@@ -34,8 +34,12 @@ import { ensureAppRoot } from './pathUtils';
 // `navigationUtils.invariants.test.ts`) enforces that boundary.
 // =============================================================================
 
-const NOT_IMPLEMENTED =
-  'navigationUtils helper not implemented yet — landing in the green commit of the subdirectory-helpers PR.';
+/**
+ * Features passed to `window.open` for new-tab navigation. `noopener` and
+ * `noreferrer` are mandatory — without them the opened page can drive the
+ * opener via `window.opener` (reverse tabnabbing) and read the referrer.
+ */
+const NEW_TAB_FEATURES = 'noopener noreferrer';
 
 /**
  * Open a router-relative path in a new browser tab.
@@ -43,9 +47,8 @@ const NOT_IMPLEMENTED =
  * The path is automatically prefixed with the application root so the new tab
  * lands inside Superset on subdirectory deployments.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
 export function openInNewTab(path: string): void {
-  throw new Error(NOT_IMPLEMENTED);
+  window.open(ensureAppRoot(path), '_blank', NEW_TAB_FEATURES);
 }
 
 /**
@@ -55,9 +58,8 @@ export function openInNewTab(path: string): void {
  * destination is outside the React Router tree (e.g. a backend-rendered page)
  * or when a hard reload is required.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
 export function redirect(path: string): void {
-  throw new Error(NOT_IMPLEMENTED);
+  window.location.href = ensureAppRoot(path);
 }
 
 /**
@@ -65,9 +67,8 @@ export function redirect(path: string): void {
  * No new history entry is pushed. Use sparingly — most navigation should go
  * through React Router's `history.replace`.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
 export function redirectReplace(path: string): void {
-  throw new Error(NOT_IMPLEMENTED);
+  window.location.replace(ensureAppRoot(path));
 }
 
 /**
@@ -75,9 +76,8 @@ export function redirectReplace(path: string): void {
  * router-relative path. Use for clipboard / share / email targets that need
  * to round-trip through external systems back to this Superset deployment.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
 export function getShareableUrl(path: string): string {
-  throw new Error(NOT_IMPLEMENTED);
+  return `${window.location.origin}${ensureAppRoot(path)}`;
 }
 
 /**
@@ -87,11 +87,11 @@ export function getShareableUrl(path: string): string {
  * runtime. Static `<a href="https://...">` literals are fine — the static-
  * invariant test only flags non-literal hrefs.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
 export function AppLink(
   props: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string },
 ): ReactElement {
-  throw new Error(NOT_IMPLEMENTED);
+  const { href, ...rest } = props;
+  return createElement('a', { ...rest, href: ensureAppRoot(href) });
 }
 
 // =============================================================================

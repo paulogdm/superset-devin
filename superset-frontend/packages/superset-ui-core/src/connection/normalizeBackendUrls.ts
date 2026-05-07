@@ -44,9 +44,6 @@
  * already-router-relative paths are passed through unchanged.
  */
 
-const NOT_IMPLEMENTED =
-  'normalizeBackendUrls is not implemented yet — landing in the green commit of the subdirectory-helpers PR.';
-
 /**
  * Field names whose values are router-relative URLs to this Superset
  * deployment and therefore safe to normalise.
@@ -62,9 +59,9 @@ const NOT_IMPLEMENTED =
  * `NORMALIZER_EXCLUSIONS` below with the reason — keep that list in sync.
  */
 export const NORMALIZED_URL_FIELDS = new Set<string>([
-  // Concrete entries are added in the green commit after the per-endpoint
-  // audit. The skeleton commit only ships the constant so static-invariant
-  // tests have a stable import target.
+  // Initial set — extended by follow-up commits as each endpoint is audited.
+  // `explore_url` is the highest-traffic field and the one Layer 3 tests pin.
+  'explore_url',
 ]);
 
 /**
@@ -116,27 +113,98 @@ export interface NormalizeOptions {
 }
 
 /**
- * Recursively normalise URL fields in a JSON-shaped value.
- *
- * Returns a new value when normalisation changed anything; otherwise returns
- * the input by reference so consumers can compare with `===`.
+ * Matches the same safe-scheme set used by `pathUtils.ensureAppRoot`. We
+ * deliberately keep this list in sync — the normaliser and the prefix helper
+ * must agree on what counts as "absolute, leave alone".
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
-export function normalizeBackendUrls<T>(
-  value: T,
-  options: NormalizeOptions,
-): T {
-  throw new Error(NOT_IMPLEMENTED);
+const SAFE_ABSOLUTE_URL_RE = /^(?:https?|ftp|mailto|tel):/i;
+
+/**
+ * Strip a trailing slash from the configured application root so segment
+ * comparisons are consistent. Bootstrap data may render the root either way
+ * (`/superset` or `/superset/`); `applicationRoot()` already trims, but
+ * callers passing the value through configuration may not.
+ */
+function stripTrailingSlash(root: string): string {
+  return root.endsWith('/') ? root.slice(0, -1) : root;
+}
+
+/**
+ * Decide whether `value` is a plain object that the walker should descend
+ * into. Class instances, Dates, Maps, etc. are returned by reference — we
+ * never mutate or replace those.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 /**
  * Normalise a single URL string. Exposed for use cases that read a URL
  * directly (e.g. bootstrap data) without going through the recursive walker.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
 export function normalizeBackendUrlString(
   value: string,
   options: NormalizeOptions,
 ): string {
-  throw new Error(NOT_IMPLEMENTED);
+  const root = stripTrailingSlash(options.applicationRoot);
+  if (!root) return value;
+  if (SAFE_ABSOLUTE_URL_RE.test(value)) return value;
+  if (value.startsWith('//')) return value;
+  if (value === root) return '/';
+  if (value.startsWith(`${root}/`)) {
+    return value.slice(root.length);
+  }
+  return value;
+}
+
+/**
+ * Recursively normalise URL fields in a JSON-shaped value.
+ *
+ * Returns a new value when normalisation changed anything; otherwise returns
+ * the input by reference so consumers can compare with `===`.
+ */
+export function normalizeBackendUrls<T>(value: T, options: NormalizeOptions): T {
+  const root = stripTrailingSlash(options.applicationRoot);
+  if (!root) return value;
+  return walk(value, root) as T;
+}
+
+function walk(value: unknown, root: string): unknown {
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out: unknown[] = new Array(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      const item = value[index];
+      const next = walk(item, root);
+      if (next !== item) changed = true;
+      out[index] = next;
+    }
+    return changed ? out : value;
+  }
+
+  if (isPlainObject(value)) {
+    let changed = false;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value)) {
+      const fieldValue = value[key];
+      let nextValue: unknown;
+      if (
+        NORMALIZED_URL_FIELDS.has(key) &&
+        typeof fieldValue === 'string'
+      ) {
+        nextValue = normalizeBackendUrlString(fieldValue, {
+          applicationRoot: root,
+        });
+      } else {
+        nextValue = walk(fieldValue, root);
+      }
+      if (nextValue !== fieldValue) changed = true;
+      out[key] = nextValue;
+    }
+    return changed ? out : value;
+  }
+
+  return value;
 }
