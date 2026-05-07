@@ -24,6 +24,42 @@ import {
 import { ensureAppRoot } from './pathUtils';
 
 // =============================================================================
+// Underlying primitives
+// =============================================================================
+// These multi-mode helpers are the long-standing sink-bearing functions that
+// the channel-3 helpers further down delegate to. They are kept here at the
+// top of the file so the channel-3 helpers can reference them in textual
+// order (oxlint's `no-use-before-define` does not honour function-declaration
+// hoisting). Migration commits will eventually rewrite call sites to use the
+// channel-3 surface and delete these.
+// =============================================================================
+
+export function navigateTo(
+  url: string,
+  options?: { newWindow?: boolean; assign?: boolean },
+): void {
+  if (options?.newWindow) {
+    window.open(ensureAppRoot(url), '_blank', 'noopener noreferrer');
+  } else if (options?.assign) {
+    window.location.assign(ensureAppRoot(url));
+  } else {
+    window.location.href = ensureAppRoot(url);
+  }
+}
+
+export function navigateWithState(
+  url: string,
+  state: Record<string, unknown>,
+  options?: { replace?: boolean },
+): void {
+  if (options?.replace) {
+    window.history.replaceState(state, '', ensureAppRoot(url));
+  } else {
+    window.history.pushState(state, '', ensureAppRoot(url));
+  }
+}
+
+// =============================================================================
 // Channel-3 helpers (browser-direct sinks)
 // =============================================================================
 //
@@ -119,7 +155,8 @@ export function redirect(path: string): void {
  * to round-trip through external systems back to this Superset deployment.
  */
 export function getShareableUrl(path: string): string {
-  return `${window.location.origin}${assertSafeNavigationUrl(ensureAppRoot(path))}`;
+  const safePath = assertSafeNavigationUrl(ensureAppRoot(path));
+  return `${window.location.origin}${safePath}`;
 }
 
 /**
@@ -137,38 +174,4 @@ export function AppLink(
     ...rest,
     href: assertSafeNavigationUrl(ensureAppRoot(href)),
   });
-}
-
-// =============================================================================
-// Legacy multi-mode helpers
-// =============================================================================
-// These predate the focused helpers above. They behave correctly but are
-// scheduled for replacement so the channel-3 surface is entirely composed of
-// single-purpose functions. Migration commits will rewrite call sites to use
-// the focused helpers, then delete these.
-// =============================================================================
-
-export function navigateTo(
-  url: string,
-  options?: { newWindow?: boolean; assign?: boolean },
-): void {
-  if (options?.newWindow) {
-    window.open(ensureAppRoot(url), '_blank', 'noopener noreferrer');
-  } else if (options?.assign) {
-    window.location.assign(ensureAppRoot(url));
-  } else {
-    window.location.href = ensureAppRoot(url);
-  }
-}
-
-export function navigateWithState(
-  url: string,
-  state: Record<string, unknown>,
-  options?: { replace?: boolean },
-): void {
-  if (options?.replace) {
-    window.history.replaceState(state, '', ensureAppRoot(url));
-  } else {
-    window.history.pushState(state, '', ensureAppRoot(url));
-  }
 }
