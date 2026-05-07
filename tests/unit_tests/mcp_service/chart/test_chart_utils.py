@@ -552,7 +552,7 @@ class TestMapXYConfig:
 
         assert result["viz_type"] == "echarts_timeseries_scatter"
         assert result["show_legend"] is False
-        assert result["legend_orientation"] == "top"
+        assert result["legendOrientation"] == "top"
 
     def test_map_xy_config_with_color_scheme(self) -> None:
         """color_scheme propagates to form_data when set."""
