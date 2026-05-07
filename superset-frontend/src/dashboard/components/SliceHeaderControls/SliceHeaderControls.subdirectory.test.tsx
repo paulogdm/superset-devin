@@ -49,15 +49,23 @@ import SliceHeaderControls, { SliceHeaderControlsProps } from '.';
 // "module factory is not allowed to reference any out-of-scope variables".
 const mockApplicationRoot = jest.fn<string, []>(() => '');
 
-// `getBootstrapData` exposes both a default export (the bootstrap getter
-// itself) and named exports like `applicationRoot`. Consumers in the
-// component tree transitively import the default — replacing the module
-// with just `{ applicationRoot }` left default undefined and crashed at
-// require-time. Spread `requireActual` to preserve everything else and
-// override only `applicationRoot`.
+// Mirror the actual module shape: __esModule + default getBootstrapData
+// + named applicationRoot/staticAssetsPrefix. Consumers in the
+// SliceHeaderControls import chain transitively call the default export,
+// so a mock that omits it crashes at require-time. (Spreading
+// jest.requireActual was tried first — it executes the real module body,
+// which reads applicationRoot from cached module state and produces the
+// wrong default-export shape under SWC/Babel ESM interop.)
 jest.mock('src/utils/getBootstrapData', () => ({
-  ...jest.requireActual<object>('src/utils/getBootstrapData'),
+  __esModule: true,
+  default: () => ({
+    common: {
+      application_root: mockApplicationRoot(),
+      static_assets_prefix: '',
+    },
+  }),
   applicationRoot: () => mockApplicationRoot(),
+  staticAssetsPrefix: () => '',
 }));
 
 const SLICE_ID = 371;
