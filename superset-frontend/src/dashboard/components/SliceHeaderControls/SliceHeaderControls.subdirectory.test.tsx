@@ -49,18 +49,20 @@ import SliceHeaderControls, { SliceHeaderControlsProps } from '.';
 // "module factory is not allowed to reference any out-of-scope variables".
 const mockApplicationRoot = jest.fn<string, []>(() => '');
 
-// Mirror the actual module shape: __esModule + default getBootstrapData
-// + named applicationRoot/staticAssetsPrefix. Consumers in the
-// SliceHeaderControls import chain transitively call the default export,
-// so a mock that omits it crashes at require-time. (Spreading
-// jest.requireActual was tried first — it executes the real module body,
-// which reads applicationRoot from cached module state and produces the
-// wrong default-export shape under SWC/Babel ESM interop.)
+// Mirror the actual module shape: __esModule + default getBootstrapData +
+// named applicationRoot/staticAssetsPrefix. Several modules
+// (setupClient.ts, hostNamesConfig.ts, etc.) call `getBootstrapData()` at
+// import time, which triggers `default` *before* the `const
+// mockApplicationRoot` line below has executed — referencing it from
+// inside `default` would hit a TDZ error. So `default` returns a static
+// shape and `applicationRoot` is the only entry point that reads from
+// the test-controllable fn. SliceHeaderControls reaches its sink
+// (window.open) via ensureAppRoot → applicationRoot, so this is enough.
 jest.mock('src/utils/getBootstrapData', () => ({
   __esModule: true,
   default: () => ({
     common: {
-      application_root: mockApplicationRoot(),
+      application_root: '',
       static_assets_prefix: '',
     },
   }),
