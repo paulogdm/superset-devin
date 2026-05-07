@@ -212,10 +212,8 @@ class TestDatasourceApi(SupersetTestCase):
         run_mock,
         can_access_mock,
     ):
-        security_manager.add_permission_view_menu("can_combined_list", "Datasource")
-        perm = security_manager.find_permission_view_menu(
-            "can_combined_list", "Datasource"
-        )
+        security_manager.add_permission_view_menu("can_read", "Datasource")
+        perm = security_manager.find_permission_view_menu("can_read", "Datasource")
         admin_role = security_manager.find_role("Admin")
         security_manager.add_permission_role(admin_role, perm)
         can_access_mock.side_effect = [True, True]

@@ -42,6 +42,10 @@ class DatasourceRestApi(BaseSupersetApi):
     class_permission_name = "Datasource"
     resource_name = "datasource"
     openapi_spec_tag = "Datasources"
+    # Map the combined list endpoint to the generic `can_read on Datasource`
+    # permission so it inherits the Gamma/Alpha/Admin grants instead of
+    # creating a method-specific permission that is Alpha-only by default.
+    method_permission_name = {"combined_list": "read"}
 
     @expose(
         "/<datasource_type>/<int:datasource_id>/column/<column_name>/values/",
