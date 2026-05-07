@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { createElement, type AnchorHTMLAttributes, type ReactElement } from 'react';
+import {
+  createElement,
+  type AnchorHTMLAttributes,
+  type ReactElement,
+} from 'react';
 import { ensureAppRoot } from './pathUtils';
 
 // =============================================================================

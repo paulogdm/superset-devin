@@ -159,27 +159,15 @@ export function normalizeBackendUrlString(
   return value;
 }
 
-/**
- * Recursively normalise URL fields in a JSON-shaped value.
- *
- * Returns a new value when normalisation changed anything; otherwise returns
- * the input by reference so consumers can compare with `===`.
- */
-export function normalizeBackendUrls<T>(value: T, options: NormalizeOptions): T {
-  const root = stripTrailingSlash(options.applicationRoot);
-  if (!root) return value;
-  return walk(value, root) as T;
-}
-
 function walk(value: unknown, root: string): unknown {
   if (Array.isArray(value)) {
     let changed = false;
-    const out: unknown[] = new Array(value.length);
+    const out: unknown[] = [];
     for (let index = 0; index < value.length; index += 1) {
       const item = value[index];
       const next = walk(item, root);
       if (next !== item) changed = true;
-      out[index] = next;
+      out.push(next);
     }
     return changed ? out : value;
   }
@@ -190,10 +178,7 @@ function walk(value: unknown, root: string): unknown {
     for (const key of Object.keys(value)) {
       const fieldValue = value[key];
       let nextValue: unknown;
-      if (
-        NORMALIZED_URL_FIELDS.has(key) &&
-        typeof fieldValue === 'string'
-      ) {
+      if (NORMALIZED_URL_FIELDS.has(key) && typeof fieldValue === 'string') {
         nextValue = normalizeBackendUrlString(fieldValue, {
           applicationRoot: root,
         });
@@ -207,4 +192,19 @@ function walk(value: unknown, root: string): unknown {
   }
 
   return value;
+}
+
+/**
+ * Recursively normalise URL fields in a JSON-shaped value.
+ *
+ * Returns a new value when normalisation changed anything; otherwise returns
+ * the input by reference so consumers can compare with `===`.
+ */
+export function normalizeBackendUrls<T>(
+  value: T,
+  options: NormalizeOptions,
+): T {
+  const root = stripTrailingSlash(options.applicationRoot);
+  if (!root) return value;
+  return walk(value, root) as T;
 }

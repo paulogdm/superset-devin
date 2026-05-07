@@ -44,10 +44,13 @@ import SliceHeaderControls, { SliceHeaderControlsProps } from '.';
 // goes green.
 // =============================================================================
 
-const APPLICATION_ROOT_MOCK = jest.fn<string, []>(() => '');
+// Variable name must start with `mock` so Jest's hoisted `jest.mock()`
+// factory can reference it. Renaming this prefix breaks the suite with
+// "module factory is not allowed to reference any out-of-scope variables".
+const mockApplicationRoot = jest.fn<string, []>(() => '');
 
 jest.mock('src/utils/getBootstrapData', () => ({
-  applicationRoot: () => APPLICATION_ROOT_MOCK(),
+  applicationRoot: () => mockApplicationRoot(),
 }));
 
 const SLICE_ID = 371;
@@ -124,7 +127,7 @@ describe('SliceHeaderControls — Cmd-click "Edit chart" under subdirectory depl
   let openSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    APPLICATION_ROOT_MOCK.mockReturnValue('');
+    mockApplicationRoot.mockReturnValue('');
     openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
   });
 
@@ -133,7 +136,7 @@ describe('SliceHeaderControls — Cmd-click "Edit chart" under subdirectory depl
   });
 
   test('opens the unprefixed exploreUrl when application root is empty', async () => {
-    APPLICATION_ROOT_MOCK.mockReturnValue('');
+    mockApplicationRoot.mockReturnValue('');
     renderControls();
 
     userEvent.click(screen.getByRole('button', { name: 'More Options' }));
@@ -148,7 +151,7 @@ describe('SliceHeaderControls — Cmd-click "Edit chart" under subdirectory depl
   });
 
   test('opens the prefixed exploreUrl when deployed under a subdirectory', async () => {
-    APPLICATION_ROOT_MOCK.mockReturnValue('/superset');
+    mockApplicationRoot.mockReturnValue('/superset');
     renderControls();
 
     userEvent.click(screen.getByRole('button', { name: 'More Options' }));
