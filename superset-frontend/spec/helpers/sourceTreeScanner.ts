@@ -44,7 +44,12 @@ const ALWAYS_SKIP_SEGMENTS = new Set([
  * Filename suffixes that legitimately mention otherwise-banned helpers (tests
  * import them, stories embed them) and should not be scanned for invariants.
  */
-const ALWAYS_SKIP_SUFFIXES = ['.test.ts', '.test.tsx', '.stories.ts', '.stories.tsx'];
+const ALWAYS_SKIP_SUFFIXES = [
+  '.test.ts',
+  '.test.tsx',
+  '.stories.ts',
+  '.stories.tsx',
+];
 
 /** Extensions considered source files. */
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];

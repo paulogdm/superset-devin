@@ -94,7 +94,9 @@ describe('normalizeBackendUrls (Layer 3 — negative passthrough)', () => {
 describe('normalizeBackendUrlString (Layer 3 — string-level entry point)', () => {
   test('strips application root from a router-relative path', () => {
     expect(
-      normalizeBackendUrlString('/superset/sqllab', { applicationRoot: PREFIX }),
+      normalizeBackendUrlString('/superset/sqllab', {
+        applicationRoot: PREFIX,
+      }),
     ).toBe('/sqllab');
   });
 

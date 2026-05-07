@@ -85,10 +85,16 @@ export const NORMALIZER_EXCLUSIONS: ReadonlyArray<{
   { field: 'bug_report_url', reason: 'External (GitHub)' },
   { field: 'documentation_url', reason: 'External (docs site)' },
   { field: 'external_url', reason: 'External by name' },
-  { field: 'bundle_url', reason: 'CDN / static asset host, not a Superset route' },
+  {
+    field: 'bundle_url',
+    reason: 'CDN / static asset host, not a Superset route',
+  },
   { field: 'tracking_url', reason: 'External (analytics)' },
   { field: 'user_login_url', reason: 'OAuth / SSO endpoints, may be external' },
-  { field: 'user_logout_url', reason: 'OAuth / SSO endpoints, may be external' },
+  {
+    field: 'user_logout_url',
+    reason: 'OAuth / SSO endpoints, may be external',
+  },
   { field: 'user_info_url', reason: 'OAuth / SSO endpoints, may be external' },
   {
     field: 'thumbnail_url',
@@ -116,7 +122,10 @@ export interface NormalizeOptions {
  * the input by reference so consumers can compare with `===`.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub
-export function normalizeBackendUrls<T>(value: T, options: NormalizeOptions): T {
+export function normalizeBackendUrls<T>(
+  value: T,
+  options: NormalizeOptions,
+): T {
   throw new Error(NOT_IMPLEMENTED);
 }
 
