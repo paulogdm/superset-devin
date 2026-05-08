@@ -17,6 +17,7 @@
  * under the License.
  */
 import callApiAndParseWithTimeout from './callApi/callApiAndParseWithTimeout';
+import { normalizeBackendUrls } from './normalizeBackendUrls';
 import {
   ClientConfig,
   ClientTimeout,
@@ -32,6 +33,20 @@ import {
   ParseMethod,
 } from './types';
 import { DEFAULT_FETCH_RETRY_OPTIONS, DEFAULT_APP_ROOT } from './constants';
+
+// Strip the configured application root from URL fields in JSON responses so
+// the rest of the frontend speaks router-relative paths. Conservative: only
+// touches fields named in `NORMALIZED_URL_FIELDS`. Other parse methods (raw,
+// text) are passed through unchanged.
+function normalizeJsonResponse<T>(result: T, appRoot: string): T {
+  if (!appRoot || result === null || typeof result !== 'object') return result;
+  if (!('json' in (result as object))) return result;
+  const r = result as unknown as { json: unknown };
+  return {
+    ...(result as object),
+    json: normalizeBackendUrls(r.json, { applicationRoot: appRoot }),
+  } as T;
+}
 
 const defaultUnauthorizedHandlerForPrefix = (appRoot: string) => () => {
   if (!window.location.pathname.startsWith(`${appRoot}/login`)) {
@@ -207,12 +222,14 @@ export default class SupersetClientClass {
       headers: { ...this.headers, ...headers },
       timeout: timeout ?? this.timeout,
       fetchRetryOptions: fetchRetryOptions ?? this.fetchRetryOptions,
-    }).catch(res => {
-      if (res?.status === 401 && !ignoreUnauthorized) {
-        this.handleUnauthorized();
-      }
-      return Promise.reject(res);
-    });
+    })
+      .then(result => normalizeJsonResponse(result, this.appRoot))
+      .catch(res => {
+        if (res?.status === 401 && !ignoreUnauthorized) {
+          this.handleUnauthorized();
+        }
+        return Promise.reject(res);
+      });
   }
 
   async ensureAuth(): CsrfPromise {

@@ -26,7 +26,7 @@ import setupFormatters from './setup/setupFormatters';
 import setupDashboardComponents from './setup/setupDashboardComponents';
 import { User } from './types/bootstrapTypes';
 import getBootstrapData, { applicationRoot } from './utils/getBootstrapData';
-import { makeUrl } from './utils/pathUtils';
+import { makeUrl } from './utils/navigationUtils';
 import './hooks/useLocale';
 
 // Import dayjs plugin types for global TypeScript support

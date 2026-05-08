@@ -29,7 +29,7 @@ import {
   LOG_ACTIONS_SPA_NAVIGATION,
 } from '../logger/LogUtils';
 import DebouncedMessageQueue from '../utils/DebouncedMessageQueue';
-import { ensureAppRoot } from '../utils/pathUtils';
+import { ensureAppRoot } from '../utils/navigationUtils';
 import type { DashboardInfo, DashboardLayoutState } from '../dashboard/types';
 import type { QueryEditor } from '../SqlLab/types';
 

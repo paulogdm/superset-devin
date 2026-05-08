@@ -78,7 +78,7 @@ import {
 } from 'src/database/actions';
 import Mousetrap from 'mousetrap';
 import { clearDatasetCache } from 'src/utils/cachedSupersetGet';
-import { makeUrl } from 'src/utils/pathUtils';
+import { makeUrl } from 'src/utils/navigationUtils';
 import {
   OwnerSelectLabel,
   OWNER_TEXT_LABEL_PROP,

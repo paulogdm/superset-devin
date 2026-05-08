@@ -28,6 +28,7 @@ import {
   Typography,
 } from '@superset-ui/core/components';
 import { Icons } from '@superset-ui/core/components/Icons';
+import { redirect } from 'src/utils/navigationUtils';
 import { getTargetUrl, isUrlTrusted, trustUrl, isAllowedScheme } from './utils';
 
 const PageContainer = styled(Flex)`
@@ -112,7 +113,7 @@ export default function RedirectWarning() {
   }, [trustChecked, targetUrl]);
 
   const handleReturn = useCallback(() => {
-    window.location.href = '/';
+    redirect('/');
   }, []);
 
   if (!targetUrl) {
