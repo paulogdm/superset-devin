@@ -48,18 +48,17 @@ import ResultSet from '../ResultSet';
 import HighlightedSql from '../HighlightedSql';
 import { StaticPosition, StyledTooltip, ModalResultSetWrapper } from './styles';
 
-interface QueryTableQuery
-  extends Omit<
-    QueryResponse,
-    | 'state'
-    | 'sql'
-    | 'progress'
-    | 'results'
-    | 'duration'
-    | 'started'
-    | 'user'
-    | 'db'
-  > {
+interface QueryTableQuery extends Omit<
+  QueryResponse,
+  | 'state'
+  | 'sql'
+  | 'progress'
+  | 'results'
+  | 'duration'
+  | 'started'
+  | 'user'
+  | 'db'
+> {
   state?: ReactNode;
   sql?: ReactNode;
   progress?: ReactNode;
