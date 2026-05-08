@@ -16,8 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-// `scanSource` and `expectNoHits` are imported by the active scan when it is
-// reinstated (see comment block below).
+import { expectNoHits, scanSource } from 'spec/helpers/sourceTreeScanner';
 
 // =============================================================================
 // Layer 2 example: structural invariant
@@ -65,23 +64,35 @@ const PATH_UTILS_IMPORT_ALLOWLIST: string[] = [
   'src/views/CRUD/hooks.ts',
 ];
 
-// The full scan (`no file outside navigationUtils.ts imports ensureAppRoot
-// or makeUrl from pathUtils`) is temporarily removed while the CI shard-hang
-// root cause is being isolated — the scanner walks ~1591 source files and a
-// recent shard-6 run hung for 3+ hours without logging PASS for any of our
-// new test files. We restore the scan in a follow-up commit once we know
-// whether `scanSource` was the cause (we suspect per-line `new RegExp(...)`
-// allocation under sync recursion). Keeping the file present with a sentinel
-// so the import path stays valid for the helpers + future scans.
-//
-// The static-invariant pattern is fully implemented in `sourceTreeScanner.ts`
-// and `scanSource` is exported for re-use. Reinstatement plan:
-//   1. Hoist the regex compile out of the per-line loop in scanSource
-//   2. Add a per-test timing log so any future hang surfaces a culprit
-//   3. Re-add the scan with the seeded PATH_UTILS_IMPORT_ALLOWLIST
 test('PATH_UTILS_IMPORT_ALLOWLIST entries are workspace-relative paths', () => {
   for (const entry of PATH_UTILS_IMPORT_ALLOWLIST) {
     expect(entry.startsWith('/')).toBe(false);
     expect(entry.includes('\\')).toBe(false);
   }
+});
+
+test('no file outside navigationUtils.ts imports ensureAppRoot or makeUrl from pathUtils', () => {
+  const hits = scanSource({
+    pattern: /\b(?:ensureAppRoot|makeUrl)\b/,
+    allowlist: [
+      // The two modules that are *allowed* to know about path prefixing.
+      // `pathUtils.ts` defines the helpers; `navigationUtils.ts` is the only
+      // re-export sanctioned for the rest of the codebase to consume.
+      'src/utils/pathUtils.ts',
+      'src/utils/navigationUtils.ts',
+      // SupersetClient has its own `appRoot` configuration path — it does
+      // not import from `pathUtils`. Excluded so a future occurrence of
+      // the word `appRoot` in connection internals does not trip this scan.
+      'packages/superset-ui-core/src/connection/SupersetClientClass.ts',
+      'packages/superset-ui-core/src/connection/normalizeBackendUrls.ts',
+      ...PATH_UTILS_IMPORT_ALLOWLIST,
+    ],
+  });
+
+  expectNoHits(
+    hits,
+    'Found imports of ensureAppRoot / makeUrl outside navigationUtils.ts. ' +
+      'Use the focused helpers (openInNewTab, redirect, getShareableUrl, AppLink) ' +
+      'instead, or add the file to PATH_UTILS_IMPORT_ALLOWLIST with justification.',
+  );
 });

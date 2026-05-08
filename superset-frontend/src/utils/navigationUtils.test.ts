@@ -18,6 +18,10 @@
  */
 import { withApplicationRoot } from 'spec/helpers/withApplicationRoot';
 
+// Failsafe so a future hang surfaces a Jest timeout error with the test name
+// rather than running for the workflow's 6-hour wallclock limit.
+jest.setTimeout(20000);
+
 // =============================================================================
 // Layer 1 example: openInNewTab
 // =============================================================================

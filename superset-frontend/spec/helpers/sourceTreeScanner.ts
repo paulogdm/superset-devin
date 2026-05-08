@@ -173,11 +173,15 @@ export function scanSource(options: ScanOptions): ScanHit[] {
       const contents = readFileSync(absoluteFile, 'utf8');
       const lines = contents.split('\n');
 
+      // Reuse a single regex per file. Without the `g` flag, RegExp's
+      // `lastIndex` is ignored on `.exec()` — recompiling per-line was
+      // wasted allocation across ~1.5M lines workspace-wide.
+      const lineRegex = pattern.flags.includes('g')
+        ? new RegExp(pattern.source, pattern.flags.replace('g', ''))
+        : pattern;
+
       for (let index = 0; index < lines.length; index += 1) {
         const lineText = lines[index];
-        // Re-create the regex per line so the global flag's lastIndex doesn't
-        // bleed across iterations.
-        const lineRegex = new RegExp(pattern.source, pattern.flags);
         const match = lineRegex.exec(lineText);
         if (match) {
           hits.push({
