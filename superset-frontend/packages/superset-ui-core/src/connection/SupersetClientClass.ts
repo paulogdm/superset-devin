@@ -38,7 +38,7 @@ import { DEFAULT_FETCH_RETRY_OPTIONS, DEFAULT_APP_ROOT } from './constants';
 // the rest of the frontend speaks router-relative paths. Conservative: only
 // touches fields named in `NORMALIZED_URL_FIELDS`. Other parse methods (raw,
 // text) are passed through unchanged.
-function normalizeJsonResponse<T>(result: T, appRoot: string): T {
+function normalizeJsonResponse<T>(result: T, appRoot: string | undefined): T {
   if (!appRoot || result === null || typeof result !== 'object') return result;
   if (!('json' in (result as object))) return result;
   const r = result as unknown as { json: unknown };
