@@ -86,7 +86,7 @@ function parseFilterCondition(key: string, value: unknown): RisonFilter {
         return {
           subject: key,
           operator: '==',
-          comparator: value as string | number,
+          comparator: value as unknown as string | number,
         };
     }
   }
@@ -464,13 +464,14 @@ export function injectRisonFiltersIntelligently(
 
     if (matchingFilterId) {
       const matchedFilter = nativeFilters[matchingFilterId];
-      if (matchedFilter) {
+      const filterId = matchedFilter?.id ?? matchingFilterId;
+      if (matchedFilter && filterId) {
         const columnName =
           matchedFilter.targets?.[0]?.column?.name ?? risonFilter.subject;
 
         const dataMaskEntry = buildDataMaskForFilter(
           risonFilter,
-          matchedFilter as {
+          { ...matchedFilter, id: filterId } as {
             id: string;
             filterType?: string;
             targets?: { column?: { name?: string } }[];
@@ -478,8 +479,8 @@ export function injectRisonFiltersIntelligently(
           columnName,
         );
 
-        updatedDataMask[matchedFilter.id] = {
-          ...updatedDataMask[matchedFilter.id],
+        updatedDataMask[filterId] = {
+          ...updatedDataMask[filterId],
           ...dataMaskEntry,
         };
         return;
