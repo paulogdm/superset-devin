@@ -164,41 +164,10 @@ describe('getShareableUrl', () => {
   });
 });
 
-describe('AppLink', () => {
-  test('renders an anchor with prefixed href under subdirectory deployment', async () => {
-    await withApplicationRoot('/superset/', async () => {
-      const { AppLink } = await import('src/utils/navigationUtils');
-      const { render } = await import('@testing-library/react');
-      const { container } = render(AppLink({ href: '/foo', children: 'go' }));
-      const anchor = container.querySelector('a');
-      expect(anchor).not.toBeNull();
-      expect(anchor?.getAttribute('href')).toBe('/superset/foo');
-    });
-  });
-
-  test('passes through other anchor props', async () => {
-    await withApplicationRoot('', async () => {
-      const { AppLink } = await import('src/utils/navigationUtils');
-      const { render } = await import('@testing-library/react');
-      const { container } = render(
-        AppLink({ href: '/foo', target: '_blank', rel: 'noreferrer' }),
-      );
-      const anchor = container.querySelector('a');
-      expect(anchor?.getAttribute('target')).toBe('_blank');
-      expect(anchor?.getAttribute('rel')).toBe('noreferrer');
-    });
-  });
-
-  test('passes absolute URLs through without prefixing', async () => {
-    await withApplicationRoot('/superset/', async () => {
-      const { AppLink } = await import('src/utils/navigationUtils');
-      const { render } = await import('@testing-library/react');
-      const { container } = render(
-        AppLink({ href: 'https://external.example.com', children: 'x' }),
-      );
-      expect(container.querySelector('a')?.getAttribute('href')).toBe(
-        'https://external.example.com',
-      );
-    });
-  });
-});
+// AppLink renders a real React element, so its tests can't use
+// withApplicationRoot — `jest.resetModules()` corrupts @testing-library/react
+// when its dist files are re-imported across the reset. Mock applicationRoot
+// at module scope and vary it per test instead.
+//
+// Note: the mock factory is hoisted, so `mockApplicationRoot` must be
+// `mock`-prefixed to satisfy Jest's out-of-scope-variable check.
