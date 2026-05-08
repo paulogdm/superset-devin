@@ -36,7 +36,7 @@ from sqlalchemy.sql import sqltypes
 from superset.db_engine_specs.base import BaseEngineSpec, convert_inspector_columns
 from superset.errors import ErrorLevel, SupersetError, SupersetErrorType
 from superset.exceptions import OAuth2RedirectError
-from superset.sql.parse import Table
+from superset.sql.parse import RLSMethod, Table
 from superset.superset_typing import (
     OAuth2ClientConfig,
     OAuth2State,
@@ -1283,3 +1283,44 @@ def test_start_oauth2_dance_falls_back_to_url_for(mocker: MockerFixture) -> None
     error = exc_info.value.error
 
     assert error.extra["redirect_uri"] == fallback_uri
+
+
+def test_get_rls_method_default_subquery() -> None:
+    """
+    By default, an engine that supports subqueries and aliases-in-select
+    uses the safer subquery RLS strategy.
+    """
+
+    class _Spec(BaseEngineSpec):
+        allows_subqueries = True
+        allows_alias_in_select = True
+
+    assert _Spec.get_rls_method() == RLSMethod.AS_SUBQUERY
+
+
+def test_get_rls_method_default_predicate_when_no_subqueries() -> None:
+    """
+    Engines without subquery / alias-in-select support fall back to the
+    AST predicate strategy.
+    """
+
+    class _Spec(BaseEngineSpec):
+        allows_subqueries = False
+        allows_alias_in_select = True
+
+    assert _Spec.get_rls_method() == RLSMethod.AS_PREDICATE
+
+
+def test_get_rls_method_class_attribute_override() -> None:
+    """
+    Setting ``rls_method`` on an engine spec opts the engine into a specific
+    strategy regardless of the subquery/alias defaults — used by engines whose
+    sqlglot dialect can parse but not faithfully regenerate SQL.
+    """
+
+    class _SpliceSpec(BaseEngineSpec):
+        allows_subqueries = True
+        allows_alias_in_select = True
+        rls_method = RLSMethod.AS_PREDICATE_SPLICE
+
+    assert _SpliceSpec.get_rls_method() == RLSMethod.AS_PREDICATE_SPLICE
