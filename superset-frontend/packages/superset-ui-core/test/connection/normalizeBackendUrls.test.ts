@@ -91,3 +91,59 @@ describe('normalizeBackendUrlString', () => {
 test('NORMALIZED_URL_FIELDS is a Set for O(1) lookup', () => {
   expect(NORMALIZED_URL_FIELDS).toBeInstanceOf(Set);
 });
+
+describe('normalizeBackendUrls (recursion + identity)', () => {
+  test('descends into arrays and normalises matching fields per element', () => {
+    const input = [
+      { explore_url: '/superset/explore/?id=1' },
+      { explore_url: '/superset/explore/?id=2' },
+    ];
+    expect(normalizeBackendUrls(input, { applicationRoot: PREFIX })).toEqual([
+      { explore_url: '/explore/?id=1' },
+      { explore_url: '/explore/?id=2' },
+    ]);
+  });
+
+  test('descends into nested objects', () => {
+    const input = {
+      result: { chart: { explore_url: '/superset/explore/?id=1' } },
+    };
+    expect(normalizeBackendUrls(input, { applicationRoot: PREFIX })).toEqual({
+      result: { chart: { explore_url: '/explore/?id=1' } },
+    });
+  });
+
+  test('returns input by reference when nothing changed', () => {
+    const input = { explore_url: '/explore/?id=1' };
+    const output = normalizeBackendUrls(input, { applicationRoot: PREFIX });
+    expect(output).toBe(input);
+  });
+
+  test('is idempotent: normalize(normalize(x)) === normalize(x)', () => {
+    const input = { explore_url: '/superset/explore/?id=1' };
+    const once = normalizeBackendUrls(input, { applicationRoot: PREFIX });
+    const twice = normalizeBackendUrls(once, { applicationRoot: PREFIX });
+    expect(twice).toEqual(once);
+  });
+
+  test('strips a value that equals the application root exactly', () => {
+    expect(
+      normalizeBackendUrlString('/superset', { applicationRoot: PREFIX }),
+    ).toBe('/');
+  });
+
+  test('tolerates a trailing slash on applicationRoot', () => {
+    expect(
+      normalizeBackendUrlString('/superset/foo', {
+        applicationRoot: '/superset/',
+      }),
+    ).toBe('/foo');
+  });
+
+  test('does not descend into class instances (Date, Map)', () => {
+    const date = new Date('2026-01-01');
+    const input = { created_at: date };
+    const output = normalizeBackendUrls(input, { applicationRoot: PREFIX });
+    expect(output.created_at).toBe(date);
+  });
+});

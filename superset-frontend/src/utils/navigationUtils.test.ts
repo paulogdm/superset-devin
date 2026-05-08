@@ -103,3 +103,102 @@ describe('openInNewTab', () => {
     });
   });
 });
+
+describe('redirect', () => {
+  let originalLocation: Location;
+
+  beforeEach(() => {
+    originalLocation = window.location;
+    delete (window as unknown as { location?: Location }).location;
+    (window as unknown as { location: { href: string } }).location = {
+      href: '',
+    } as Location;
+  });
+
+  afterEach(() => {
+    (window as unknown as { location: Location }).location = originalLocation;
+  });
+
+  test('sets window.location.href to the unprefixed path under empty root', async () => {
+    await withApplicationRoot('', async () => {
+      const { redirect } = await import('src/utils/navigationUtils');
+      redirect('/');
+      expect(window.location.href).toBe('/');
+    });
+  });
+
+  test('prefixes the path under a subdirectory deployment', async () => {
+    await withApplicationRoot('/superset/', async () => {
+      const { redirect } = await import('src/utils/navigationUtils');
+      redirect('/');
+      expect(window.location.href).toBe('/superset/');
+    });
+  });
+
+  test('passes absolute URLs through unchanged', async () => {
+    await withApplicationRoot('/superset/', async () => {
+      const { redirect } = await import('src/utils/navigationUtils');
+      redirect('https://external.example.com/foo');
+      expect(window.location.href).toBe('https://external.example.com/foo');
+    });
+  });
+});
+
+describe('getShareableUrl', () => {
+  test('returns origin + unprefixed path under empty root', async () => {
+    await withApplicationRoot('', async () => {
+      const { getShareableUrl } = await import('src/utils/navigationUtils');
+      expect(getShareableUrl('/sqllab?id=1')).toBe(
+        `${window.location.origin}/sqllab?id=1`,
+      );
+    });
+  });
+
+  test('returns origin + prefixed path under subdirectory deployment', async () => {
+    await withApplicationRoot('/superset/', async () => {
+      const { getShareableUrl } = await import('src/utils/navigationUtils');
+      expect(getShareableUrl('/sqllab?id=1')).toBe(
+        `${window.location.origin}/superset/sqllab?id=1`,
+      );
+    });
+  });
+});
+
+describe('AppLink', () => {
+  test('renders an anchor with prefixed href under subdirectory deployment', async () => {
+    await withApplicationRoot('/superset/', async () => {
+      const { AppLink } = await import('src/utils/navigationUtils');
+      const { render } = await import('@testing-library/react');
+      const { container } = render(AppLink({ href: '/foo', children: 'go' }));
+      const anchor = container.querySelector('a');
+      expect(anchor).not.toBeNull();
+      expect(anchor?.getAttribute('href')).toBe('/superset/foo');
+    });
+  });
+
+  test('passes through other anchor props', async () => {
+    await withApplicationRoot('', async () => {
+      const { AppLink } = await import('src/utils/navigationUtils');
+      const { render } = await import('@testing-library/react');
+      const { container } = render(
+        AppLink({ href: '/foo', target: '_blank', rel: 'noreferrer' }),
+      );
+      const anchor = container.querySelector('a');
+      expect(anchor?.getAttribute('target')).toBe('_blank');
+      expect(anchor?.getAttribute('rel')).toBe('noreferrer');
+    });
+  });
+
+  test('passes absolute URLs through without prefixing', async () => {
+    await withApplicationRoot('/superset/', async () => {
+      const { AppLink } = await import('src/utils/navigationUtils');
+      const { render } = await import('@testing-library/react');
+      const { container } = render(
+        AppLink({ href: 'https://external.example.com', children: 'x' }),
+      );
+      expect(container.querySelector('a')?.getAttribute('href')).toBe(
+        'https://external.example.com',
+      );
+    });
+  });
+});
