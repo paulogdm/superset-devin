@@ -23,16 +23,9 @@ import {
 } from 'react';
 import { ensureAppRoot } from './pathUtils';
 
-// =============================================================================
-// Underlying primitives
-// =============================================================================
-// These multi-mode helpers are the long-standing sink-bearing functions that
-// the channel-3 helpers further down delegate to. They are kept here at the
-// top of the file so the channel-3 helpers can reference them in textual
-// order (oxlint's `no-use-before-define` does not honour function-declaration
-// hoisting). Migration commits will eventually rewrite call sites to use the
-// channel-3 surface and delete these.
-// =============================================================================
+// `navigateTo` and `navigateWithState` are declared first so the focused
+// helpers below can call them without tripping oxlint's no-use-before-define
+// (which does not honour function-declaration hoisting).
 
 export function navigateTo(
   url: string,
@@ -59,69 +52,26 @@ export function navigateWithState(
   }
 }
 
-// =============================================================================
-// Channel-3 helpers (browser-direct sinks)
-// =============================================================================
-//
-// Every helper in this section takes a *router-relative* path (the same shape
-// you'd pass to `<Link to>` or `history.push`) and applies the application
-// root internally before handing the URL to the browser. This keeps the rest
-// of the codebase decision-free: callers always write `/sqllab`, never
-// `${applicationRoot()}/sqllab`.
-//
-// Once migration is complete, `ensureAppRoot` and `makeUrl` are imported only
-// from this module. A static-invariant test (see
-// `navigationUtils.invariants.test.ts`) enforces that boundary.
-// =============================================================================
-
-/**
- * Features passed to `window.open` for new-tab navigation. `noopener` and
- * `noreferrer` are mandatory — without them the opened page can drive the
- * opener via `window.opener` (reverse tabnabbing) and read the referrer.
- */
 const NEW_TAB_FEATURES = 'noopener noreferrer';
 
-/**
- * Schemes that are safe to feed to `window.location` / `window.open` /
- * anchor `href`. Anything outside this allow-list (`javascript:`, `data:`,
- * `vbscript:`, etc.) can execute script in the current origin and is
- * rejected by {@link assertSafeNavigationUrl}.
- *
- * The first two alternatives match relative URLs:
- *   - `^/(?!/)` — absolute path on this origin (`/foo`), but not a
- *     protocol-relative URL (`//host`). Protocol-relative is matched by the
- *     `\/\/` alternative instead.
- *   - `\/\/`  — protocol-relative (`//cdn.example.com/foo`).
- *
- * Kept locally in `navigationUtils.ts` rather than imported from pathUtils
- * so the safety property is checkable from this file alone — that's what
- * CodeQL needs to clear the dataflow alert on the sinks below.
- */
+// Allow-list of safe URL shapes for navigation: relative paths, protocol-
+// relative URLs, and a small set of known-safe schemes. `ensureAppRoot`
+// already neutralises `javascript:` / `data:` by prefixing them as relative
+// paths, but checking here gives CodeQL a locally-visible sanitiser on the
+// sinks below.
 const SAFE_NAVIGATION_URL_RE = /^(?:\/(?!\/)|\/\/|https?:|ftp:|mailto:|tel:)/i;
 
-/**
- * Validate that `url` uses a navigation-safe shape. `ensureAppRoot` already
- * neutralises script-bearing schemes by prefixing them as relative paths
- * (`javascript:alert(1)` → `/javascript:alert(1)`), but this assertion gives
- * the property a single, locally-readable enforcement point and keeps the
- * channel-3 sinks below from being flagged as untrusted-data flows.
- */
 function assertSafeNavigationUrl(url: string): string {
   if (!SAFE_NAVIGATION_URL_RE.test(url)) {
     throw new Error(
-      `navigationUtils refused unsafe URL: only relative paths and ` +
-        `http(s):, ftp:, mailto:, tel: schemes are allowed.`,
+      'navigationUtils refused unsafe URL: only relative paths and ' +
+        'http(s):, ftp:, mailto:, tel: schemes are allowed.',
     );
   }
   return url;
 }
 
-/**
- * Open a router-relative path in a new browser tab.
- *
- * The path is automatically prefixed with the application root so the new tab
- * lands inside Superset on subdirectory deployments.
- */
+/** Open a router-relative path in a new browser tab. */
 export function openInNewTab(path: string): void {
   window.open(
     assertSafeNavigationUrl(ensureAppRoot(path)),
@@ -131,39 +81,22 @@ export function openInNewTab(path: string): void {
 }
 
 /**
- * Navigate the current window to a router-relative path via `window.location`.
- *
- * Unlike `history.push`, this triggers a full page load. Use it only when the
- * destination is outside the React Router tree (e.g. a backend-rendered page)
- * or when a hard reload is required.
- *
- * Implemented by delegating to {@link navigateTo} so the underlying
- * `window.location.href` sink lives in one place — the long-standing
- * `navigateTo` body — rather than being duplicated across this module.
- *
- * (A `redirectReplace` companion that wraps `window.location.replace` will
- * be added in the same shape when the first migration site needs it.)
+ * Full-page redirect to a router-relative path. Use only when the destination
+ * is outside the React Router tree or a hard reload is required.
  */
 export function redirect(path: string): void {
   navigateTo(path);
 }
 
-/**
- * Build a fully-qualified URL (`<scheme>://<host><appRoot><path>`) from a
- * router-relative path. Use for clipboard / share / email targets that need
- * to round-trip through external systems back to this Superset deployment.
- */
+/** Build a `${origin}${appRoot}${path}` URL for clipboard / share targets. */
 export function getShareableUrl(path: string): string {
   const safePath = assertSafeNavigationUrl(ensureAppRoot(path));
   return `${window.location.origin}${safePath}`;
 }
 
 /**
- * Anchor element that prefixes its `href` with the application root.
- *
- * Use this instead of `<a href={varExpr}>` whenever the href is computed at
- * runtime. Static `<a href="https://...">` literals are fine — the static-
- * invariant test only flags non-literal hrefs.
+ * Anchor element that prefixes its href with the application root. Use
+ * instead of `<a href={varExpr}>` whenever the href is computed at runtime.
  */
 export function AppLink(
   props: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string },

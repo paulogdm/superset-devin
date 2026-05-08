@@ -18,31 +18,10 @@
  */
 
 /**
- * Test fixture for subdirectory-deployment scenarios.
- *
- * Bootstrap data in Superset is read once per module load via
- * `getBootstrapData()` and cached. Tests that exercise URL generation under a
- * non-empty `application_root` therefore need to rewrite the `#app` element
- * and force the relevant modules to re-import so the cache is rebuilt.
- *
- * `withApplicationRoot` centralises that ritual. Usage:
- *
- *     import { withApplicationRoot } from 'spec/helpers/withApplicationRoot';
- *
- *     test('redirects to prefixed root under subdirectory deployment', async () => {
- *       await withApplicationRoot('/superset/', async () => {
- *         const { redirect } = await import('src/utils/navigationUtils');
- *         redirect('/');
- *         expect(window.location.href).toBe('/superset/');
- *       });
- *     });
- *
- * The callback receives a freshly-reset module registry, so any imports inside
- * it observe the configured root. After the callback finishes (or throws), the
- * fixture restores the previous `<div id="app">` markup and resets modules
- * again, leaving the global state clean for the next test.
- *
- * Pass `''` (the default) to simulate a deployment with no application root.
+ * Run `callback` with `getBootstrapData().common.application_root` set to
+ * `applicationRoot`. Resets modules so any imports inside the callback see
+ * the configured value, then restores the prior DOM and module cache on exit.
+ * Pass `''` to simulate the default root-of-domain deployment.
  */
 export async function withApplicationRoot<T>(
   applicationRoot: string,
@@ -51,15 +30,10 @@ export async function withApplicationRoot<T>(
   const previousBody = document.body.innerHTML;
 
   try {
-    const bootstrapData = {
-      common: { application_root: applicationRoot },
-    };
+    const bootstrapData = { common: { application_root: applicationRoot } };
     document.body.innerHTML = `<div id="app" data-bootstrap='${JSON.stringify(bootstrapData)}'></div>`;
     jest.resetModules();
-
-    // Touch getBootstrapData first so the cached value reflects the new DOM.
     await import('src/utils/getBootstrapData');
-
     return await callback();
   } finally {
     document.body.innerHTML = previousBody;
@@ -67,19 +41,7 @@ export async function withApplicationRoot<T>(
   }
 }
 
-/**
- * Convenience wrapper that runs the same assertion under multiple application
- * roots. Use when the assertion text doesn't depend on the prefix.
- *
- *     applicationRootScenarios([
- *       { root: '', expected: '/sqllab' },
- *       { root: '/superset/', expected: '/superset/sqllab' },
- *       { root: '/a/b/c/', expected: '/a/b/c/sqllab' },
- *     ], async ({ expected }) => {
- *       const { ensureAppRoot } = await import('src/utils/pathUtils');
- *       expect(ensureAppRoot('/sqllab')).toBe(expected);
- *     });
- */
+/** Run `body` once per scenario, each under a different application root. */
 export async function applicationRootScenarios<S extends { root: string }>(
   scenarios: S[],
   body: (scenario: S) => Promise<void> | void,

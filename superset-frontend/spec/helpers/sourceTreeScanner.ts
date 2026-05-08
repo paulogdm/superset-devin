@@ -19,17 +19,8 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative, resolve, sep } from 'path';
 
-/**
- * Directories scanned by `scanSource` when `roots` is not supplied.
- * Resolved relative to the `superset-frontend` workspace.
- */
 const DEFAULT_ROOTS = ['src', 'packages/superset-ui-core/src'];
 
-/**
- * Path segments that are always excluded. We compare against path components
- * so any directory named `node_modules` (etc.) is skipped wherever it appears
- * in the tree.
- */
 const ALWAYS_SKIP_SEGMENTS = new Set([
   'node_modules',
   'dist',
@@ -40,10 +31,6 @@ const ALWAYS_SKIP_SEGMENTS = new Set([
   'playwright',
 ]);
 
-/**
- * Filename suffixes that legitimately mention otherwise-banned helpers (tests
- * import them, stories embed them) and should not be scanned for invariants.
- */
 const ALWAYS_SKIP_SUFFIXES = [
   '.test.ts',
   '.test.tsx',
@@ -51,31 +38,21 @@ const ALWAYS_SKIP_SUFFIXES = [
   '.stories.tsx',
 ];
 
-/** Extensions considered source files. */
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];
 
 export interface ScanOptions {
-  /**
-   * Workspace-relative directory roots to scan. Defaults to the source tree.
-   * Each entry is walked recursively.
-   */
+  /** Workspace-relative directories to scan. Defaults to the source tree. */
   roots?: string[];
-  /**
-   * Additional path segments to skip in addition to {@link ALWAYS_SKIP_SEGMENTS}.
-   */
+  /** Extra path segments to skip on top of {@link ALWAYS_SKIP_SEGMENTS}. */
   ignoreSegments?: string[];
   /** Regex run against each line of each file. */
   pattern: RegExp;
-  /**
-   * File paths (relative to `superset-frontend`, forward slashes) that are
-   * exempt from this scan. Use sparingly; every entry should justify itself
-   * in a comment.
-   */
+  /** Workspace-relative paths (forward slashes) exempt from this scan. */
   allowlist?: string[];
 }
 
 export interface ScanHit {
-  /** Path relative to `superset-frontend`, with forward slashes. */
+  /** Workspace-relative path with forward slashes. */
   file: string;
   /** 1-based line number. */
   line: number;
@@ -85,11 +62,7 @@ export interface ScanHit {
   match: string;
 }
 
-/**
- * Workspace root used as the base for relative paths returned by the scanner.
- * `__dirname` resolves to `<workspace>/spec/helpers`, so the parent's parent
- * is the workspace regardless of where Jest is invoked from.
- */
+// __dirname resolves to <workspace>/spec/helpers regardless of cwd.
 const WORKSPACE_ROOT = resolve(__dirname, '..', '..');
 
 function isSourceFile(name: string): boolean {
@@ -128,15 +101,9 @@ function toForwardSlashes(path: string): string {
 }
 
 /**
- * Scan source files under `roots` for lines matching `pattern`.
- *
- * Each match is returned as a {@link ScanHit} with a workspace-relative path
- * and 1-based line number. Files listed in `allowlist` are skipped entirely.
- *
- * Scanning is deliberately textual (line-by-line regex) rather than AST-based
- * — these invariants flag forbidden *patterns*, not forbidden *expressions*.
- * False positives on string literals or comments should be addressed by
- * tightening the regex, not by parsing.
+ * Line-by-line regex scan over the source tree. Returns one {@link ScanHit}
+ * per matching line. Textual (not AST-based) — false positives on string
+ * literals should be fixed by tightening the regex.
  */
 export function scanSource(options: ScanOptions): ScanHit[] {
   const {
@@ -173,9 +140,8 @@ export function scanSource(options: ScanOptions): ScanHit[] {
       const contents = readFileSync(absoluteFile, 'utf8');
       const lines = contents.split('\n');
 
-      // Reuse a single regex per file. Without the `g` flag, RegExp's
-      // `lastIndex` is ignored on `.exec()` — recompiling per-line was
-      // wasted allocation across ~1.5M lines workspace-wide.
+      // Reuse the regex per file. Without the `g` flag, `.exec` ignores
+      // lastIndex, so recompiling per-line was wasted allocation.
       const lineRegex = pattern.flags.includes('g')
         ? new RegExp(pattern.source, pattern.flags.replace('g', ''))
         : pattern;
@@ -198,10 +164,7 @@ export function scanSource(options: ScanOptions): ScanHit[] {
   return hits;
 }
 
-/**
- * Format a list of hits as a human-readable failure message. Used by
- * invariant tests so the developer sees `file:line` for every violation.
- */
+/** Format hits as a multi-line failure message: `  file:line — text`. */
 export function formatHits(hits: ScanHit[], header: string): string {
   if (hits.length === 0) return header;
   const lines = hits
@@ -212,12 +175,7 @@ export function formatHits(hits: ScanHit[], header: string): string {
   return `${header}\n${lines.join('\n')}${overflow}`;
 }
 
-/**
- * Helper that fails a Jest test with a formatted message when `hits` is
- * non-empty. Returns void so call sites read naturally:
- *
- *     expectNoHits(scanSource({ pattern: /window\.open\(/ }), 'Found raw window.open');
- */
+/** Throw with a formatted message if `hits` is non-empty. */
 export function expectNoHits(hits: ScanHit[], header: string): void {
   if (hits.length > 0) {
     throw new Error(formatHits(hits, header));

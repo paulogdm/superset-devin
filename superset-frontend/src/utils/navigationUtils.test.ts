@@ -18,22 +18,8 @@
  */
 import { withApplicationRoot } from 'spec/helpers/withApplicationRoot';
 
-// Failsafe so a future hang surfaces a Jest timeout error with the test name
-// rather than running for the workflow's 6-hour wallclock limit.
+// Surface any future hang as a Jest timeout instead of stalling CI.
 jest.setTimeout(20000);
-
-// =============================================================================
-// Layer 1 example: openInNewTab
-// =============================================================================
-//
-// Layer 1 covers per-helper unit behaviour. The full PR adds parallel suites
-// for `redirect`, `redirectReplace`, `getShareableUrl`, and `<AppLink>`. This
-// file ships a single helper as a template for the structure those follow:
-//
-//   1. Each helper is exercised under empty appRoot AND a non-empty appRoot.
-//   2. Absolute URLs (https://, mailto:, etc.) pass through unchanged.
-//   3. Already-prefixed input is idempotent (does not double-prefix).
-// =============================================================================
 
 describe('openInNewTab', () => {
   let openSpy: jest.SpyInstance;

@@ -18,62 +18,19 @@
  */
 
 /**
- * Normalises backend-supplied URL fields so the frontend speaks one shape
- * (router-relative paths) regardless of whether Superset is deployed at the
- * web root or under a subdirectory.
- *
- * The backend renders absolute paths that include the application root, e.g.
- * `/superset/explore/?slice_id=1`. Channel-3 helpers (window.open, redirect,
- * AppLink) and channel-2 (`SupersetClient`) re-apply the root themselves;
- * leaving the prefix on a backend value would double it. So we strip the
- * configured root on the way in and let the consumers re-add it.
- *
- * # Why this is conservative by design
- *
- * The normaliser **only touches fields whose name appears in
- * `NORMALIZED_URL_FIELDS`**. It does not heuristically detect URLs by content
- * — a `description` field containing `/looks/like/a/path` is left alone.
- * Adding a new URL field to the backend therefore requires an explicit
- * one-line change here. Drift requires intentional opt-in.
- *
- * Exact-segment prefix matching prevents false positives where a value
- * happens to share a prefix with the application root (e.g.
- * `/superset-public/...` is not stripped when the root is `/superset`).
- *
- * Absolute URLs (`https://...`, `mailto:`, protocol-relative `//cdn`) and
- * already-router-relative paths are passed through unchanged.
+ * Strips the configured application root from URL fields in API responses so
+ * the frontend always speaks router-relative paths. Without normalisation,
+ * `SupersetClient` and `<Link>` would re-prefix backend-supplied URLs and
+ * produce `/foo/foo/...`.
  */
 
-/**
- * Field names whose values are router-relative URLs to this Superset
- * deployment and therefore safe to normalise.
- *
- * Curated, not heuristic. Add a field here only after confirming:
- *
- *   1. The backend always sets it to a path within this Superset instance
- *      (never an external URL or a path with a different prefix).
- *   2. Every consumer expects to feed the value to a channel-3 helper or
- *      `SupersetClient`, both of which re-apply the application root.
- *
- * Fields that have been *deliberately excluded* are listed in
- * `NORMALIZER_EXCLUSIONS` below with the reason — keep that list in sync.
- */
-export const NORMALIZED_URL_FIELDS = new Set<string>([
-  // Initial set — extended by follow-up commits as each endpoint is audited.
-  // `explore_url` is the highest-traffic field and the one Layer 3 tests pin.
-  'explore_url',
-]);
+/** Field names known to be router-relative URLs to this Superset instance. */
+export const NORMALIZED_URL_FIELDS = new Set<string>(['explore_url']);
 
 /**
- * URL-shaped field names that we have deliberately *not* added to
- * `NORMALIZED_URL_FIELDS`, with the reason. The negative tests in
- * `normalizeBackendUrls.test.ts` assert that values for these names are
- * passed through unchanged even when the value happens to begin with the
- * configured application root.
- *
- * This list is informational — code does not read it. Its purpose is to
- * preserve institutional knowledge so a future contributor doesn't add an
- * exclusion to the allow-list by mistake.
+ * URL-shaped fields that look normalisable but are deliberately left alone
+ * (external destinations, CDN hosts, OAuth endpoints, deployment-dependent
+ * targets). Informational only — keep in sync with the negative tests.
  */
 export const NORMALIZER_EXCLUSIONS: ReadonlyArray<{
   field: string;
@@ -82,68 +39,33 @@ export const NORMALIZER_EXCLUSIONS: ReadonlyArray<{
   { field: 'bug_report_url', reason: 'External (GitHub)' },
   { field: 'documentation_url', reason: 'External (docs site)' },
   { field: 'external_url', reason: 'External by name' },
-  {
-    field: 'bundle_url',
-    reason: 'CDN / static asset host, not a Superset route',
-  },
+  { field: 'bundle_url', reason: 'CDN / static asset host' },
   { field: 'tracking_url', reason: 'External (analytics)' },
-  { field: 'user_login_url', reason: 'OAuth / SSO endpoints, may be external' },
-  {
-    field: 'user_logout_url',
-    reason: 'OAuth / SSO endpoints, may be external',
-  },
-  { field: 'user_info_url', reason: 'OAuth / SSO endpoints, may be external' },
-  {
-    field: 'thumbnail_url',
-    reason:
-      'Storage host varies (S3 / local) — needs per-endpoint audit before normalising',
-  },
-  {
-    field: 'creator_url',
-    reason: 'User-profile destination varies by deployment',
-  },
+  { field: 'user_login_url', reason: 'OAuth / SSO endpoint, may be external' },
+  { field: 'user_logout_url', reason: 'OAuth / SSO endpoint, may be external' },
+  { field: 'user_info_url', reason: 'OAuth / SSO endpoint, may be external' },
+  { field: 'thumbnail_url', reason: 'Storage host varies (S3 / local)' },
+  { field: 'creator_url', reason: 'User-profile destination varies' },
 ];
 
 export interface NormalizeOptions {
-  /**
-   * Application root to strip. Pass an empty string to disable normalisation.
-   * Trailing slash is tolerated; the strip logic compares whole path segments.
-   */
+  /** Application root to strip. Empty string disables normalisation. */
   applicationRoot: string;
 }
 
-/**
- * Matches the same safe-scheme set used by `pathUtils.ensureAppRoot`. We
- * deliberately keep this list in sync — the normaliser and the prefix helper
- * must agree on what counts as "absolute, leave alone".
- */
 const SAFE_ABSOLUTE_URL_RE = /^(?:https?|ftp|mailto|tel):/i;
 
-/**
- * Strip a trailing slash from the configured application root so segment
- * comparisons are consistent. Bootstrap data may render the root either way
- * (`/superset` or `/superset/`); `applicationRoot()` already trims, but
- * callers passing the value through configuration may not.
- */
 function stripTrailingSlash(root: string): string {
   return root.endsWith('/') ? root.slice(0, -1) : root;
 }
 
-/**
- * Decide whether `value` is a plain object that the walker should descend
- * into. Class instances, Dates, Maps, etc. are returned by reference — we
- * never mutate or replace those.
- */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object') return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
 }
 
-/**
- * Normalise a single URL string. Exposed for use cases that read a URL
- * directly (e.g. bootstrap data) without going through the recursive walker.
- */
+/** Normalise a single URL string (used directly when walking is overkill). */
 export function normalizeBackendUrlString(
   value: string,
   options: NormalizeOptions,
@@ -177,14 +99,10 @@ function walk(value: unknown, root: string): unknown {
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(value)) {
       const fieldValue = value[key];
-      let nextValue: unknown;
-      if (NORMALIZED_URL_FIELDS.has(key) && typeof fieldValue === 'string') {
-        nextValue = normalizeBackendUrlString(fieldValue, {
-          applicationRoot: root,
-        });
-      } else {
-        nextValue = walk(fieldValue, root);
-      }
+      const nextValue =
+        NORMALIZED_URL_FIELDS.has(key) && typeof fieldValue === 'string'
+          ? normalizeBackendUrlString(fieldValue, { applicationRoot: root })
+          : walk(fieldValue, root);
       if (nextValue !== fieldValue) changed = true;
       out[key] = nextValue;
     }
@@ -195,10 +113,8 @@ function walk(value: unknown, root: string): unknown {
 }
 
 /**
- * Recursively normalise URL fields in a JSON-shaped value.
- *
- * Returns a new value when normalisation changed anything; otherwise returns
- * the input by reference so consumers can compare with `===`.
+ * Recursively normalise URL fields in a JSON-shaped value. Returns the input
+ * by reference when nothing changed, so callers can compare with `===`.
  */
 export function normalizeBackendUrls<T>(
   value: T,

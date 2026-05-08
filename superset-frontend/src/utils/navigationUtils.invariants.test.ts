@@ -18,31 +18,10 @@
  */
 import { expectNoHits, scanSource } from 'spec/helpers/sourceTreeScanner';
 
-// =============================================================================
-// Layer 2 example: structural invariant
-// =============================================================================
-//
-// Layer 2 contains tests that read the source tree and assert structural
-// properties — "no file outside `navigationUtils.ts` imports `ensureAppRoot`"
-// is the canonical example. The full PR adds parallel scans for raw
-// `window.open` / `window.location.href`, double-prefix patterns through
-// `SupersetClient` and `history.push`, and `<Link to={makeUrl(...)}>`.
-//
-// Each test seeds an allow-list of current violations so the suite is GREEN
-// on day one. Migration commits then delete entries from the allow-list,
-// driving the count to zero. New violations introduced after migration fail
-// the suite immediately and surface a `file:line` location in the message.
-//
-// The list below is the INITIAL seed — every entry will be removed by a
-// subsequent migration commit. Do not extend it without an inline comment
-// explaining why the file is exempt.
-// =============================================================================
-
+// Call sites that still import ensureAppRoot / makeUrl directly. Migration
+// PRs replace each one with the focused helpers in navigationUtils.ts and
+// drop its entry here. New entries should not be added without justification.
 const PATH_UTILS_IMPORT_ALLOWLIST: string[] = [
-  // Migrated by future commits. Each line listed here is a call site that
-  // currently imports `ensureAppRoot` or `makeUrl` directly; the migration
-  // PRs replace those imports with calls to focused helpers in
-  // `src/utils/navigationUtils.ts` and remove the file from this list.
   'src/SqlLab/components/QueryTable/index.tsx',
   'src/SqlLab/components/ResultSet/index.tsx',
   'src/components/Chart/DrillDetail/DrillDetailPane.tsx',
@@ -75,14 +54,13 @@ test('no file outside navigationUtils.ts imports ensureAppRoot or makeUrl from p
   const hits = scanSource({
     pattern: /\b(?:ensureAppRoot|makeUrl)\b/,
     allowlist: [
-      // The two modules that are *allowed* to know about path prefixing.
-      // `pathUtils.ts` defines the helpers; `navigationUtils.ts` is the only
-      // re-export sanctioned for the rest of the codebase to consume.
+      // pathUtils.ts defines the helpers; navigationUtils.ts is the only
+      // sanctioned re-export point for the rest of the codebase.
       'src/utils/pathUtils.ts',
       'src/utils/navigationUtils.ts',
-      // SupersetClient has its own `appRoot` configuration path — it does
-      // not import from `pathUtils`. Excluded so a future occurrence of
-      // the word `appRoot` in connection internals does not trip this scan.
+      // SupersetClient has its own appRoot configuration path that doesn't
+      // import from pathUtils. Excluded so any internal mention of `appRoot`
+      // doesn't trip the scan.
       'packages/superset-ui-core/src/connection/SupersetClientClass.ts',
       'packages/superset-ui-core/src/connection/normalizeBackendUrls.ts',
       ...PATH_UTILS_IMPORT_ALLOWLIST,
@@ -93,6 +71,6 @@ test('no file outside navigationUtils.ts imports ensureAppRoot or makeUrl from p
     hits,
     'Found imports of ensureAppRoot / makeUrl outside navigationUtils.ts. ' +
       'Use the focused helpers (openInNewTab, redirect, getShareableUrl, AppLink) ' +
-      'instead, or add the file to PATH_UTILS_IMPORT_ALLOWLIST with justification.',
+      'or add the file to PATH_UTILS_IMPORT_ALLOWLIST with justification.',
   );
 });

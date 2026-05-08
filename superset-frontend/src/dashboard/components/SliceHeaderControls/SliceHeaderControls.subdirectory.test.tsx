@@ -21,50 +21,19 @@ import { VizType } from '@superset-ui/core';
 import mockState from 'spec/fixtures/mockState';
 import SliceHeaderControls, { SliceHeaderControlsProps } from '.';
 
-// =============================================================================
-// Layer 5 example: per-site regression test for SliceHeaderControls
-// =============================================================================
-//
-// Subdirectory-specific behaviour for SliceHeaderControls. The full PR adds
-// parallel files for RedirectWarning, ResultSet, DatasourceEditor,
-// SaveDatasetModal, ViewQuery, plus reinstates the regression tests from
-// commits 86fe4fc8b2 (chart export) and 36a32e7b49 (SavedQueryList,
-// dashboard fullscreen) which haven't merged to master yet.
-//
-// Why a separate file: the existing SliceHeaderControls.test.tsx is 676 lines
-// of shared setup that does not mock `getBootstrapData`. Mocking it at the
-// top of that file would force every existing test to consider application
-// root behaviour. Putting subdirectory regressions in their own file keeps
-// the mock surface explicit and discoverable by name.
-//
-// This test is RED today: SliceHeaderControls/index.tsx:266 calls
-// `window.open(props.exploreUrl, '_blank')` without prefixing the root, so
-// the assertion below fails. The migration commit replaces that call with
-// `openInNewTab(props.exploreUrl)` (which prefixes internally) and the test
-// goes green.
-// =============================================================================
+// Subdirectory-specific regressions live here so the existing 676-line
+// SliceHeaderControls.test.tsx doesn't need to mock getBootstrapData.
 
-// Variable name must start with `mock` so Jest's hoisted `jest.mock()`
-// factory can reference it. Renaming this prefix breaks the suite with
-// "module factory is not allowed to reference any out-of-scope variables".
+// Name must start with `mock` so Jest's hoisted jest.mock() factory may
+// reference it. `default` returns a static shape (not mockApplicationRoot)
+// because consumers like setupClient.ts call getBootstrapData() at import
+// time — calling mockApplicationRoot inside `default` hits TDZ.
 const mockApplicationRoot = jest.fn<string, []>(() => '');
 
-// Mirror the actual module shape: __esModule + default getBootstrapData +
-// named applicationRoot/staticAssetsPrefix. Several modules
-// (setupClient.ts, hostNamesConfig.ts, etc.) call `getBootstrapData()` at
-// import time, which triggers `default` *before* the `const
-// mockApplicationRoot` line below has executed — referencing it from
-// inside `default` would hit a TDZ error. So `default` returns a static
-// shape and `applicationRoot` is the only entry point that reads from
-// the test-controllable fn. SliceHeaderControls reaches its sink
-// (window.open) via ensureAppRoot → applicationRoot, so this is enough.
 jest.mock('src/utils/getBootstrapData', () => ({
   __esModule: true,
   default: () => ({
-    common: {
-      application_root: '',
-      static_assets_prefix: '',
-    },
+    common: { application_root: '', static_assets_prefix: '' },
   }),
   applicationRoot: () => mockApplicationRoot(),
   staticAssetsPrefix: () => '',
