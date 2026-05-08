@@ -73,7 +73,9 @@ describe('normalizeBackendUrls', () => {
 describe('normalizeBackendUrlString', () => {
   test('strips application root from a router-relative path', () => {
     expect(
-      normalizeBackendUrlString('/superset/sqllab', { applicationRoot: PREFIX }),
+      normalizeBackendUrlString('/superset/sqllab', {
+        applicationRoot: PREFIX,
+      }),
     ).toBe('/sqllab');
   });
 
