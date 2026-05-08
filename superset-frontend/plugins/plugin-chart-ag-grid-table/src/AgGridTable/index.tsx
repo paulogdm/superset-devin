@@ -102,6 +102,7 @@ export interface AgGridTableProps {
   renderTimeComparisonDropdown: () => JSX.Element | null;
   cleanedTotals: DataRecord;
   showTotals: boolean;
+  showRowGroupCounts: boolean;
   width: number;
   onColumnStateChange?: (state: AgGridChartStateWithMetadata) => void;
   onFilterChanged?: (filterModel: Record<string, any>) => void;
@@ -142,6 +143,7 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
     renderTimeComparisonDropdown,
     cleanedTotals,
     showTotals,
+    showRowGroupCounts,
     width,
     onColumnStateChange,
     onFilterChanged,
@@ -184,6 +186,15 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
         minWidth: 100,
       }),
       [],
+    );
+
+    const autoGroupColumnDef = useMemo<ColDef>(
+      () => ({
+        cellRendererParams: {
+          suppressCount: !showRowGroupCounts,
+        },
+      }),
+      [showRowGroupCounts],
     );
 
     // Memoize container style
@@ -510,6 +521,7 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
           rowHeight={30}
           columnDefs={colDefsFromProps}
           defaultColDef={defaultColDef}
+          autoGroupColumnDef={autoGroupColumnDef}
           onColumnGroupOpened={params => params.api.sizeColumnsToFit()}
           rowSelection="multiple"
           animateRows

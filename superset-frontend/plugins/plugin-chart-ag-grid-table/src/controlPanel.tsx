@@ -431,6 +431,22 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'show_row_group_counts',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Show row group counts'),
+              renderTrigger: true,
+              default: true,
+              description: t(
+                'Show the number of rows in each group next to the group label when row grouping is enabled.',
+              ),
+              visibility: isAggMode,
+              resetOnHide: false,
+            },
+          },
+        ],
+        [
+          {
             name: 'show_totals',
             config: {
               type: 'CheckboxControl',

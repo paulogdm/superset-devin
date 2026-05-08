@@ -80,6 +80,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     colorPositiveNegative,
     totals,
     showTotals,
+    showRowGroupCounts,
     columnColorFormatters,
     basicColorFormatters,
     width,
@@ -444,6 +445,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         }
         cleanedTotals={totals || {}}
         showTotals={showTotals}
+        showRowGroupCounts={showRowGroupCounts}
         width={width}
         onColumnStateChange={handleColumnStateChange}
         chartState={chartState}

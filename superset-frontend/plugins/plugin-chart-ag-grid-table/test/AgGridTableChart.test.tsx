@@ -35,6 +35,22 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+test('transformProps defaults showRowGroupCounts to true', () => {
+  expect(transformProps(testData.basic).showRowGroupCounts).toBe(true);
+});
+
+test('transformProps respects show_row_group_counts=false', () => {
+  expect(
+    transformProps({
+      ...testData.basic,
+      rawFormData: {
+        ...testData.basic.rawFormData,
+        show_row_group_counts: false,
+      },
+    }).showRowGroupCounts,
+  ).toBe(false);
+});
+
 test('transformProps parses pageLength to pageSize', () => {
   expect(transformProps(testData.basic).pageSize).toBe(20);
   expect(

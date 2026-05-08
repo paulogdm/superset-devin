@@ -124,6 +124,7 @@ export interface AgGridTableChartTransformedProps<
   colorPositiveNegative: boolean;
   totals: DataRecord | undefined;
   showTotals: boolean;
+  showRowGroupCounts: boolean;
   columnColorFormatters: ColorFormatters;
   basicColorFormatters?: { [Key: string]: BasicColorFormatterType }[];
   basicColorColumnFormatters?: { [Key: string]: BasicColorFormatterType }[];
