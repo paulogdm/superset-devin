@@ -22,6 +22,28 @@ import React from 'react';
 // eslint-disable-next-line no-restricted-imports
 import { configure as configureTestingLibrary } from '@testing-library/react';
 import { matchers } from '@emotion/jest';
+import failOnConsole from 'jest-fail-on-console';
+
+// Fail tests only on React 19 deprecation/removal warnings surfaced by React 18.3
+// (other console.error/warn output is left alone during the migration).
+const REACT_19_DEPRECATION_PATTERNS = [
+  /Support for defaultProps will be removed/,
+  /ReactDOM\.render is no longer supported/,
+  /ReactDOM\.hydrate is no longer supported/,
+  /unmountComponentAtNode is deprecated/,
+  /findDOMNode is deprecated/,
+  /String refs are deprecated/,
+  /Legacy context API has been detected/,
+  /`ReactDOMTestUtils\.act` is deprecated/,
+  /will be removed in (a future major release|React 19)/,
+];
+
+failOnConsole({
+  shouldFailOnError: true,
+  shouldFailOnWarn: true,
+  silenceMessage: message =>
+    !REACT_19_DEPRECATION_PATTERNS.some(pattern => pattern.test(message)),
+});
 
 configureTestingLibrary({
   testIdAttribute: 'data-test',
