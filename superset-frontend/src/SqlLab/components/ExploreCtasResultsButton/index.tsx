@@ -56,11 +56,7 @@ const ExploreCtasResultsButton = ({
   };
 
   const visualize = () => {
-    (
-      dispatch(createCtasDatasource(buildVizOptions)) as unknown as Promise<{
-        table_id: number;
-      }>
-    )
+    dispatch(createCtasDatasource(buildVizOptions))
       .then(data => {
         const formData = {
           datasource: `${data.table_id}__table`,
