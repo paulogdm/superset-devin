@@ -132,9 +132,10 @@ def test_refresh_oauth2_token_deletes_token_on_oauth2_exception(
     )
     token = mocker.MagicMock()
     token.refresh_token = "refresh-token"  # noqa: S105
+    db.session.query().filter_by().one_or_none.return_value = token
 
     with pytest.raises(OAuth2ExceptionError):
-        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec, token)
+        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec)
 
     db.session.delete.assert_called_with(token)
     db.session.flush.assert_called_once()
@@ -161,9 +162,10 @@ def test_refresh_oauth2_token_keeps_token_on_other_exception(
     db_engine_spec.get_oauth2_fresh_token.side_effect = Exception("Network error")
     token = mocker.MagicMock()
     token.refresh_token = "refresh-token"  # noqa: S105
+    db.session.query().filter_by().one_or_none.return_value = token
 
     with pytest.raises(Exception, match="Network error"):
-        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec, token)
+        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec)
 
     db.session.delete.assert_not_called()
 
@@ -176,7 +178,7 @@ def test_refresh_oauth2_token_no_access_token_in_response(
 
     This can happen when the refresh token was revoked.
     """
-    mocker.patch("superset.utils.oauth2.db")
+    db = mocker.patch("superset.utils.oauth2.db")
     mocker.patch("superset.utils.oauth2.DistributedLock")
     db_engine_spec = mocker.MagicMock()
     db_engine_spec.get_oauth2_fresh_token.return_value = {
@@ -184,8 +186,9 @@ def test_refresh_oauth2_token_no_access_token_in_response(
     }
     token = mocker.MagicMock()
     token.refresh_token = "refresh-token"  # noqa: S105
+    db.session.query().filter_by().one_or_none.return_value = token
 
-    result = refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec, token)
+    result = refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec)
 
     assert result is None
 
@@ -209,9 +212,10 @@ def test_refresh_oauth2_token_updates_refresh_token(
     }
     token = mocker.MagicMock()
     token.refresh_token = "old-refresh-token"  # noqa: S105
+    db.session.query().filter_by().one_or_none.return_value = token
 
     with freeze_time("2024-01-01"):
-        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec, token)
+        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec)
 
     assert token.access_token == "new-access-token"  # noqa: S105
     assert token.access_token_expiration == datetime(2024, 1, 1, 1)
@@ -237,13 +241,35 @@ def test_refresh_oauth2_token_keeps_refresh_token(
     }
     token = mocker.MagicMock()
     token.refresh_token = "original-refresh-token"  # noqa: S105
+    db.session.query().filter_by().one_or_none.return_value = token
 
     with freeze_time("2024-01-01"):
-        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec, token)
+        refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec)
 
     assert token.access_token == "new-access-token"  # noqa: S105
     assert token.refresh_token == "original-refresh-token"  # noqa: S105
     db.session.add.assert_called_with(token)
+
+
+def test_refresh_oauth2_token_returns_none_when_row_deleted_under_lock(
+    mocker: MockerFixture,
+) -> None:
+    """
+    Test that refresh_oauth2_token returns None when the row is gone under the lock.
+
+    When concurrent requests are triggered and the first one deletes the token row and
+    releases the lock before the second one gets to `refresh_oauth2_token`, the token
+    is queried again to avoid a stale reference.
+    """
+    db = mocker.patch("superset.utils.oauth2.db")
+    mocker.patch("superset.utils.oauth2.DistributedLock")
+    db_engine_spec = mocker.MagicMock()
+    db.session.query().filter_by().one_or_none.return_value = None
+
+    result = refresh_oauth2_token(DUMMY_OAUTH2_CONFIG, 1, 1, db_engine_spec)
+
+    assert result is None
+    db_engine_spec.get_oauth2_fresh_token.assert_not_called()
 
 
 def test_generate_code_verifier_length() -> None:
