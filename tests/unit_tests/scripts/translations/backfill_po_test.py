@@ -229,3 +229,62 @@ def test_apply_translation_plural_round_trip_from_parse_response() -> None:
         entry, parsed[0], _item(), model="claude-test", mark_fuzzy=True
     )
     assert entry.msgstr_plural == {0: "manzana", 1: "manzanas"}
+
+
+def test_apply_translation_plural_list_response() -> None:
+    """
+    Models sometimes return a JSON array for plural forms (forms are ordered,
+    so a list is a valid representation). Each element must map to the
+    corresponding plural index. Without this branch, ``str(list)`` would emit
+    Python list-repr and broadcast it to every form — observed in the wild
+    on a fresh run for French.
+    """
+    entry = _make_plural_entry()
+    translation = json.dumps(["manzana", "manzanas"])
+    backfill_po._apply_translation(
+        entry, translation, _item(), model="claude-test", mark_fuzzy=True
+    )
+    assert entry.msgstr_plural == {0: "manzana", 1: "manzanas"}
+
+
+def test_apply_translation_plural_list_round_trip_from_parse_response() -> None:
+    """
+    The list-of-forms response must also survive parse_response → _apply
+    round-trip. parse_response JSON-serializes lists; _apply_translation
+    must json.loads them back into a list and distribute across forms.
+    """
+    raw = '{"0": ["manzana", "manzanas"]}'
+    parsed = backfill_po.parse_response(raw, batch_size=1)
+    entry = _make_plural_entry()
+    backfill_po._apply_translation(
+        entry, parsed[0], _item(), model="claude-test", mark_fuzzy=True
+    )
+    assert entry.msgstr_plural == {0: "manzana", 1: "manzanas"}
+
+
+def test_apply_translation_plural_list_shorter_repeats_last_form() -> None:
+    """
+    If the model returns fewer forms than the language requires, repeat the
+    last form rather than leaving slots empty (which would render as the
+    literal English msgid via gettext fallback).
+    """
+    entry = polib.POEntry(msgid="apple", msgid_plural="apples")
+    entry.msgstr_plural = {0: "", 1: "", 2: ""}
+    backfill_po._apply_translation(
+        entry,
+        json.dumps(["uno", "dos"]),
+        _item(),
+        model="claude-test",
+        mark_fuzzy=True,
+    )
+    assert entry.msgstr_plural == {0: "uno", 1: "dos", 2: "dos"}
+
+
+def test_apply_translation_plural_empty_list_falls_back_to_string_broadcast() -> None:
+    """An empty JSON list isn't usable; fall back to writing the raw string."""
+    entry = _make_plural_entry()
+    backfill_po._apply_translation(
+        entry, "[]", _item(), model="claude-test", mark_fuzzy=True
+    )
+    # Falls into the JSONDecodeError/ValueError branch → broadcast raw string.
+    assert entry.msgstr_plural == {0: "[]", 1: "[]"}

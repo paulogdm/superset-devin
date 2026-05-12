@@ -309,6 +309,40 @@ def translate_batch(
     return parse_response(result.stdout.strip(), len(batch))
 
 
+def _apply_plural_translation(entry: polib.POEntry, translation: str) -> None:
+    """Distribute a model response across the entry's plural forms.
+
+    Model may return a JSON dict ({"0": "form0", "1": "form1"}), a JSON list
+    (["form0", "form1"], also valid since plural forms are ordered), a JSON
+    scalar (a single translation that fills every form), or a plain non-JSON
+    string (older models that ignore the JSON instruction).
+    """
+    try:
+        plural_value = json.loads(translation)
+    except (json.JSONDecodeError, ValueError):
+        for k in entry.msgstr_plural:
+            entry.msgstr_plural[k] = translation
+        return
+
+    if isinstance(plural_value, dict):
+        entry.msgstr_plural = {int(k): str(v) for k, v in plural_value.items()}
+        return
+
+    if isinstance(plural_value, list) and plural_value:
+        # Distribute list items across plural form indices in order; if the
+        # model returned fewer forms than the language requires, repeat the
+        # last form rather than leaving slots blank.
+        forms = [str(v) for v in plural_value]
+        for k in sorted(entry.msgstr_plural):
+            entry.msgstr_plural[k] = forms[k] if k < len(forms) else forms[-1]
+        return
+
+    # Scalar (or empty list) — broadcast to every form.
+    fill = str(plural_value) if plural_value not in (None, []) else translation
+    for k in entry.msgstr_plural:
+        entry.msgstr_plural[k] = fill
+
+
 def _apply_translation(
     entry: polib.POEntry,
     translation: str,
@@ -318,17 +352,7 @@ def _apply_translation(
 ) -> None:
     """Write a translation string into a POEntry and add attribution."""
     if entry.msgid_plural:
-        # Model may return a JSON dict of plural forms or a plain string
-        try:
-            plural_dict = json.loads(translation)
-            if isinstance(plural_dict, dict):
-                entry.msgstr_plural = {int(k): str(v) for k, v in plural_dict.items()}
-            else:
-                for k in entry.msgstr_plural:
-                    entry.msgstr_plural[k] = str(plural_dict)
-        except (json.JSONDecodeError, ValueError):
-            for k in entry.msgstr_plural:
-                entry.msgstr_plural[k] = translation
+        _apply_plural_translation(entry, translation)
     else:
         entry.msgstr = translation
 
