@@ -60,6 +60,12 @@ afterEach(() => {
   jest.clearAllMocks(); // Clears mock history but keeps spy in place
 });
 
+afterAll(() => {
+  // Restore the module-scope SupersetClient.get spy so it doesn't leak its
+  // mocked behavior into other test files running in the same Jest worker.
+  SupersetClientGet.mockRestore();
+});
+
 interface TestDatasource {
   id?: number;
   name: string;
