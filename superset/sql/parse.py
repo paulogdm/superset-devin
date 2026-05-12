@@ -76,7 +76,7 @@ SQLGLOT_DIALECTS = {
     "duckdb": Dialects.DUCKDB,
     # "dynamodb": ???
     # "elasticsearch": ???
-    # "exa": ???
+    "exa": Dialects.EXASOL,
     # "firebird": ???
     "firebolt": Firebolt,
     "gsheets": Dialects.SQLITE,
@@ -105,7 +105,7 @@ SQLGLOT_DIALECTS = {
     "shillelagh": Dialects.SQLITE,
     "singlestoredb": SingleStore,
     "snowflake": Dialects.SNOWFLAKE,
-    # "solr": ???
+    "solr": Dialects.SOLR,
     "spark": Dialects.SPARK,
     "sqlite": Dialects.SQLITE,
     "starrocks": Dialects.STARROCKS,
