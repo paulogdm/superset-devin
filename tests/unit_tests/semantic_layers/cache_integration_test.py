@@ -28,6 +28,7 @@ import pyarrow as pa
 import pytest
 from pytest_mock import MockerFixture
 from superset_core.semantic_layers.types import (
+    AggregationType,
     Dimension,
     Metric,
     SemanticRequest,
@@ -189,3 +190,106 @@ def test_changed_on_invalidates_cache(
     datasource.changed_on = datetime(2026, 2, 1, 0, 0, 0)
     get_results(_qo(datasource, ">", 1))
     assert view_implementation.get_table.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Projection (v2) — dropping a dimension and re-aggregating
+# ---------------------------------------------------------------------------
+
+
+def _make_view(metric_aggregation: AggregationType | None) -> tuple[Any, MagicMock]:
+    dim_b = Dimension(id="t.b", name="b", type=pa.utf8())
+    dim_c = Dimension(id="t.c", name="c", type=pa.utf8())
+    metric_x = Metric(
+        id="t.x",
+        name="x",
+        type=pa.float64(),
+        definition="sum(x)",
+        aggregation=metric_aggregation,
+    )
+    impl = MagicMock()
+    impl.metrics = {metric_x}
+    impl.dimensions = {dim_b, dim_c}
+    impl.features = frozenset()
+    impl.get_metrics = MagicMock(return_value={metric_x})
+    impl.get_dimensions = MagicMock(return_value={dim_b, dim_c})
+
+    ds = MagicMock()
+    ds.implementation = impl
+    ds.uuid = "proj-view"
+    ds.changed_on = datetime(2026, 3, 1, 0, 0, 0)
+    ds.cache_timeout = 60
+    ds.fetch_values_predicate = None
+    return impl, ds
+
+
+def _qo_dims(ds: MagicMock, columns: list[str]) -> ValidatedQueryObject:
+    return ValidatedQueryObject(
+        datasource=ds,
+        metrics=["x"],
+        columns=columns,  # type: ignore[arg-type]
+        filters=[],
+    )
+
+
+def _result_bc(rows: list[tuple[str, str, float]]) -> SemanticResult:
+    df = pd.DataFrame(rows, columns=["b", "c", "x"])
+    return SemanticResult(
+        requests=[SemanticRequest(type="SQL", definition="select b,c,sum(x)")],
+        results=pa.Table.from_pandas(df, preserve_index=False),
+    )
+
+
+def test_projection_reuses_cached_for_dropped_dim(
+    fake_cache: _InMemoryCache,
+) -> None:
+    impl, ds = _make_view(AggregationType.SUM)
+    impl.get_table = MagicMock(
+        return_value=_result_bc(
+            [("b1", "c1", 5.0), ("b1", "c2", 3.0), ("b2", "c1", 4.0)]
+        )
+    )
+
+    first = get_results(_qo_dims(ds, ["b", "c"]))
+    assert impl.get_table.call_count == 1
+    assert len(first.df) == 3
+
+    second = get_results(_qo_dims(ds, ["b"]))
+    assert impl.get_table.call_count == 1  # served via projection
+    df = second.df.sort_values("b").reset_index(drop=True)
+    assert df["b"].tolist() == ["b1", "b2"]
+    assert df["x"].tolist() == [8.0, 4.0]
+
+
+def test_projection_skipped_when_aggregation_unknown(
+    fake_cache: _InMemoryCache,
+) -> None:
+    impl, ds = _make_view(None)  # metric has no aggregation declared
+    impl.get_table = MagicMock(
+        side_effect=[
+            _result_bc([("b1", "c1", 5.0), ("b1", "c2", 3.0)]),
+            _result_bc([("b1", "c1", 5.0)]),  # what the SV would compute for [b]
+        ]
+    )
+
+    get_results(_qo_dims(ds, ["b", "c"]))
+    assert impl.get_table.call_count == 1
+
+    get_results(_qo_dims(ds, ["b"]))
+    assert impl.get_table.call_count == 2  # cannot project, re-executed
+
+
+def test_projection_skipped_for_avg(
+    fake_cache: _InMemoryCache,
+) -> None:
+    impl, ds = _make_view(AggregationType.AVG)
+    impl.get_table = MagicMock(
+        side_effect=[
+            _result_bc([("b1", "c1", 5.0), ("b1", "c2", 3.0)]),
+            _result_bc([("b1", "c1", 4.0)]),
+        ]
+    )
+
+    get_results(_qo_dims(ds, ["b", "c"]))
+    get_results(_qo_dims(ds, ["b"]))
+    assert impl.get_table.call_count == 2

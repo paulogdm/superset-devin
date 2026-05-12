@@ -24,6 +24,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 from superset_core.semantic_layers.types import (
+    AggregationType,
     Dimension,
     Filter,
     Metric,
@@ -54,8 +55,18 @@ def dim(id_: str, name: str | None = None) -> Dimension:
     return Dimension(id=id_, name=name or id_, type=pa.utf8())
 
 
-def met(id_: str, name: str | None = None) -> Metric:
-    return Metric(id=id_, name=name or id_, type=pa.float64(), definition="x")
+def met(
+    id_: str,
+    name: str | None = None,
+    aggregation: AggregationType | None = None,
+) -> Metric:
+    return Metric(
+        id=id_,
+        name=name or id_,
+        type=pa.float64(),
+        definition="x",
+        aggregation=aggregation,
+    )
 
 
 COL_A = dim("col.a", "a")
@@ -95,10 +106,15 @@ def query(
 
 
 def entry_from(q: SemanticQuery, value_key_: str = "vk") -> CachedEntry:
-    from superset.semantic_layers.cache import _group_limit_key, _order_key
+    from superset.semantic_layers.cache import (
+        _dimension_key,
+        _group_limit_key,
+        _order_key,
+    )
 
     return CachedEntry(
         filters=frozenset(q.filters or set()),
+        dimension_keys=frozenset(_dimension_key(d) for d in q.dimensions),
         limit=q.limit,
         offset=q.offset or 0,
         order_key=_order_key(q.order),
@@ -193,15 +209,16 @@ def test_implies_like_exact_match_only() -> None:
 def test_can_satisfy_empty_cached_returns_all_as_leftovers() -> None:
     cached_q = query(filters=None)
     new_q = query(filters={where(COL_A, Operator.GREATER_THAN, 5)})
-    ok, leftovers = can_satisfy(entry_from(cached_q), new_q)
+    ok, leftovers, projection = can_satisfy(entry_from(cached_q), new_q)
     assert ok is True
+    assert projection is False
     assert leftovers == {where(COL_A, Operator.GREATER_THAN, 5)}
 
 
 def test_can_satisfy_narrower_filter() -> None:
     cached_q = query(filters={where(COL_A, Operator.GREATER_THAN, 1)})
     new_q = query(filters={where(COL_A, Operator.GREATER_THAN, 2)})
-    ok, leftovers = can_satisfy(entry_from(cached_q), new_q)
+    ok, leftovers, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is True
     assert leftovers == {where(COL_A, Operator.GREATER_THAN, 2)}
 
@@ -209,7 +226,7 @@ def test_can_satisfy_narrower_filter() -> None:
 def test_can_satisfy_broader_filter_fails() -> None:
     cached_q = query(filters={where(COL_A, Operator.GREATER_THAN, 2)})
     new_q = query(filters={where(COL_A, Operator.GREATER_THAN, 1)})
-    ok, leftovers = can_satisfy(entry_from(cached_q), new_q)
+    ok, leftovers, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is False
     assert leftovers == set()
 
@@ -217,7 +234,7 @@ def test_can_satisfy_broader_filter_fails() -> None:
 def test_can_satisfy_missing_constraint_fails() -> None:
     cached_q = query(filters={where(COL_A, Operator.GREATER_THAN, 1)})
     new_q = query(filters=None)
-    ok, _ = can_satisfy(entry_from(cached_q), new_q)
+    ok, _, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is False
 
 
@@ -229,7 +246,7 @@ def test_can_satisfy_new_filter_on_extra_column() -> None:
             where(COL_B, Operator.EQUALS, "x"),
         }
     )
-    ok, leftovers = can_satisfy(entry_from(cached_q), new_q)
+    ok, leftovers, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is True
     assert leftovers == {
         where(COL_A, Operator.GREATER_THAN, 2),
@@ -244,7 +261,7 @@ def test_can_satisfy_leftover_on_non_projected_column_fails() -> None:
         filters={where(other, Operator.EQUALS, "x")},
         dimensions=[COL_A, COL_B],
     )
-    ok, _ = can_satisfy(entry_from(cached_q), new_q)
+    ok, _, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is False
 
 
@@ -252,8 +269,8 @@ def test_can_satisfy_having_requires_exact_set() -> None:
     cached_q = query(filters={having(M_X, Operator.GREATER_THAN, 100)})
     same = query(filters={having(M_X, Operator.GREATER_THAN, 100)})
     tighter = query(filters={having(M_X, Operator.GREATER_THAN, 200)})
-    ok_same, _ = can_satisfy(entry_from(cached_q), same)
-    ok_tight, _ = can_satisfy(entry_from(cached_q), tighter)
+    ok_same, _, _ = can_satisfy(entry_from(cached_q), same)
+    ok_tight, _, _ = can_satisfy(entry_from(cached_q), tighter)
     assert ok_same is True
     assert ok_tight is False
 
@@ -262,8 +279,8 @@ def test_can_satisfy_adhoc_requires_exact_set() -> None:
     cached_q = query(filters={adhoc("col_a > 1")})
     same = query(filters={adhoc("col_a > 1")})
     different = query(filters={adhoc("col_a > 2")})
-    ok_same, _ = can_satisfy(entry_from(cached_q), same)
-    ok_diff, _ = can_satisfy(entry_from(cached_q), different)
+    ok_same, _, _ = can_satisfy(entry_from(cached_q), same)
+    ok_diff, _, _ = can_satisfy(entry_from(cached_q), different)
     assert ok_same is True
     assert ok_diff is False
 
@@ -276,7 +293,7 @@ def test_can_satisfy_adhoc_requires_exact_set() -> None:
 def test_can_satisfy_unlimited_cached_satisfies_any_limit() -> None:
     cached_q = query(filters=None, limit=None)
     new_q = query(filters=None, limit=10)
-    ok, leftovers = can_satisfy(entry_from(cached_q), new_q)
+    ok, leftovers, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is True
     assert leftovers == set()
 
@@ -285,35 +302,35 @@ def test_can_satisfy_smaller_limit_with_matching_order() -> None:
     order = [(M_X, OrderDirection.DESC)]
     cached_q = query(filters=None, limit=100, order=order)
     new_q = query(filters=None, limit=10, order=order)
-    ok, _ = can_satisfy(entry_from(cached_q), new_q)
+    ok, _, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is True
 
 
 def test_can_satisfy_smaller_limit_different_order_fails() -> None:
     cached_q = query(filters=None, limit=100, order=[(M_X, OrderDirection.DESC)])
     new_q = query(filters=None, limit=10, order=[(M_X, OrderDirection.ASC)])
-    ok, _ = can_satisfy(entry_from(cached_q), new_q)
+    ok, _, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is False
 
 
 def test_can_satisfy_larger_limit_fails() -> None:
     cached_q = query(filters=None, limit=10)
     new_q = query(filters=None, limit=100)
-    ok, _ = can_satisfy(entry_from(cached_q), new_q)
+    ok, _, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is False
 
 
 def test_can_satisfy_no_new_limit_when_cached_has_one_fails() -> None:
     cached_q = query(filters=None, limit=100)
     new_q = query(filters=None, limit=None)
-    ok, _ = can_satisfy(entry_from(cached_q), new_q)
+    ok, _, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is False
 
 
 def test_can_satisfy_offset_never_reused() -> None:
     cached_q = SemanticQuery(metrics=[M_X], dimensions=[COL_A], offset=5)
     new_q = SemanticQuery(metrics=[M_X], dimensions=[COL_A], offset=5)
-    ok, _ = can_satisfy(entry_from(cached_q), new_q)
+    ok, _, _ = can_satisfy(entry_from(cached_q), new_q)
     assert ok is False
 
 
@@ -333,7 +350,7 @@ def test_apply_post_processing_filters_and_limits() -> None:
         limit=2,
     )
     result = _apply_post_processing(
-        cached, new_q, {where(COL_A, Operator.GREATER_THAN, 2)}
+        cached, new_q, {where(COL_A, Operator.GREATER_THAN, 2)}, False
     )
     result_df = result.results.to_pandas()
     assert list(result_df["a"]) == [3, 5]
@@ -347,7 +364,7 @@ def test_apply_post_processing_no_leftovers_no_limit_returns_original() -> None:
         requests=[], results=pa.Table.from_pandas(df, preserve_index=False)
     )
     new_q = query(filters=None, limit=None)
-    out = _apply_post_processing(cached, new_q, set())
+    out = _apply_post_processing(cached, new_q, set(), False)
     # same object reference is OK; we explicitly return the input
     assert out is cached
 
@@ -394,3 +411,261 @@ def test_value_key_with_datetime_filter() -> None:
     q = SemanticQuery(metrics=[M_X], dimensions=[COL_A], filters={f})
     # should not raise
     assert value_key(VIEW, q).startswith("sv:val:")
+
+
+def test_shape_key_independent_of_dimensions() -> None:
+    # The v2 shape key buckets entries by metric set only; different dimension
+    # sets share the same shape so the projection path can find broader entries.
+    q1 = SemanticQuery(metrics=[M_X], dimensions=[COL_A, COL_B])
+    q2 = SemanticQuery(metrics=[M_X], dimensions=[COL_A])
+    assert shape_key(VIEW, q1) == shape_key(VIEW, q2)
+    # Value keys still differ.
+    assert value_key(VIEW, q1) != value_key(VIEW, q2)
+
+
+# ---------------------------------------------------------------------------
+# Projection (v2)
+# ---------------------------------------------------------------------------
+
+
+M_SUM = met("met.sum", "sum_x", aggregation=AggregationType.SUM)
+M_COUNT = met("met.count", "count_x", aggregation=AggregationType.COUNT)
+M_MIN = met("met.min", "min_x", aggregation=AggregationType.MIN)
+M_MAX = met("met.max", "max_x", aggregation=AggregationType.MAX)
+M_AVG = met("met.avg", "avg_x", aggregation=AggregationType.AVG)
+M_UNKNOWN = met("met.unknown", "unknown_x", aggregation=None)
+
+
+def _projection_query(
+    metrics: list[Metric],
+    new_dimensions: list[Dimension],
+    cached_dimensions: list[Dimension],
+    cached_filters: set[Filter] | None = None,
+    cached_limit: int | None = None,
+    new_filters: set[Filter] | None = None,
+    new_limit: int | None = None,
+    new_order: Any = None,
+) -> tuple[CachedEntry, SemanticQuery]:
+    cached_q = SemanticQuery(
+        metrics=metrics,
+        dimensions=cached_dimensions,
+        filters=cached_filters,
+        limit=cached_limit,
+    )
+    new_q = SemanticQuery(
+        metrics=metrics,
+        dimensions=new_dimensions,
+        filters=new_filters,
+        limit=new_limit,
+        order=new_order,
+    )
+    return entry_from(cached_q), new_q
+
+
+@pytest.mark.parametrize(
+    "metric,operator",
+    [
+        (M_SUM, "sum"),
+        (M_COUNT, "sum"),
+        (M_MIN, "min"),
+        (M_MAX, "max"),
+    ],
+)
+def test_can_satisfy_projection_each_additive_op(metric: Metric, operator: str) -> None:
+    entry, new_q = _projection_query(
+        metrics=[metric],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+    )
+    ok, leftovers, projection = can_satisfy(entry, new_q)
+    assert ok is True
+    assert projection is True
+    assert leftovers == set()
+
+
+def test_projection_rolls_up_sum() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+    )
+    cached_df = pd.DataFrame(
+        {"a": ["x", "x", "y", "y"], "b": [1, 2, 1, 2], "sum_x": [10, 20, 30, 40]}
+    )
+    cached = SemanticResult(
+        requests=[SemanticRequest(type="SQL", definition="select ...")],
+        results=pa.Table.from_pandas(cached_df, preserve_index=False),
+    )
+    out = _apply_post_processing(cached, new_q, set(), True)
+    out_df = out.results.to_pandas().sort_values("a").reset_index(drop=True)
+    assert list(out_df["a"]) == ["x", "y"]
+    assert list(out_df["sum_x"]) == [30, 70]
+
+
+def test_projection_rolls_up_min_max_count() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_MIN, M_MAX, M_COUNT],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+    )
+    cached_df = pd.DataFrame(
+        {
+            "a": ["x", "x", "y", "y"],
+            "b": [1, 2, 1, 2],
+            "min_x": [5, 2, 9, 8],
+            "max_x": [50, 60, 70, 80],
+            "count_x": [1, 1, 2, 3],
+        }
+    )
+    cached = SemanticResult(
+        requests=[],
+        results=pa.Table.from_pandas(cached_df, preserve_index=False),
+    )
+    out = _apply_post_processing(cached, new_q, set(), True)
+    df = out.results.to_pandas().sort_values("a").reset_index(drop=True)
+    assert list(df["min_x"]) == [2, 8]
+    assert list(df["max_x"]) == [60, 80]
+    assert list(df["count_x"]) == [2, 5]
+
+
+def test_projection_drops_multiple_dims() -> None:
+    col_c = dim("col.c", "c")
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B, col_c],
+    )
+    cached_df = pd.DataFrame(
+        {
+            "a": ["x", "x", "x", "y"],
+            "b": [1, 1, 2, 1],
+            "c": [10, 20, 10, 10],
+            "sum_x": [1, 2, 3, 4],
+        }
+    )
+    cached = SemanticResult(
+        requests=[], results=pa.Table.from_pandas(cached_df, preserve_index=False)
+    )
+    out = _apply_post_processing(cached, new_q, set(), True)
+    df = out.results.to_pandas().sort_values("a").reset_index(drop=True)
+    assert list(df["sum_x"]) == [6, 4]
+
+
+def test_projection_with_leftover_filter_then_rollup() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+        new_filters={where(COL_B, Operator.GREATER_THAN, 1)},
+    )
+    cached_df = pd.DataFrame(
+        {"a": ["x", "x", "y"], "b": [1, 2, 2], "sum_x": [10, 20, 30]}
+    )
+    cached = SemanticResult(
+        requests=[], results=pa.Table.from_pandas(cached_df, preserve_index=False)
+    )
+    ok, leftovers, projection = can_satisfy(entry, new_q)
+    assert ok is True
+    assert projection is True
+    out = _apply_post_processing(cached, new_q, leftovers, projection)
+    df = out.results.to_pandas().sort_values("a").reset_index(drop=True)
+    # b > 1 removes the (x,1) row; x sums to 20, y to 30
+    assert list(df["sum_x"]) == [20, 30]
+
+
+def test_projection_with_order_and_limit() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+        new_order=[(M_SUM, OrderDirection.DESC)],
+        new_limit=1,
+    )
+    cached_df = pd.DataFrame(
+        {"a": ["x", "x", "y"], "b": [1, 2, 1], "sum_x": [1, 2, 100]}
+    )
+    cached = SemanticResult(
+        requests=[], results=pa.Table.from_pandas(cached_df, preserve_index=False)
+    )
+    out = _apply_post_processing(cached, new_q, set(), True)
+    df = out.results.to_pandas()
+    assert len(df) == 1
+    assert df["a"].tolist() == ["y"]
+    assert df["sum_x"].tolist() == [100]
+
+
+def test_projection_rejected_when_metric_aggregation_unknown() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_UNKNOWN],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False
+
+
+def test_projection_rejected_for_avg() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_AVG],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False
+
+
+def test_projection_rejected_when_cached_has_limit() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+        cached_limit=10,
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False
+
+
+def test_projection_rejected_when_cached_has_having() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+        cached_filters={having(M_SUM, Operator.GREATER_THAN, 10)},
+        new_filters={having(M_SUM, Operator.GREATER_THAN, 10)},
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False
+
+
+def test_projection_rejected_when_order_references_dropped_dim() -> None:
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+        new_order=[(COL_B, OrderDirection.ASC)],
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False
+
+
+def test_projection_rejected_when_cached_has_filter_on_dropped_dim() -> None:
+    # cached restricts c; rolling up to [a] would miss rows we'd need
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+        cached_filters={where(COL_B, Operator.GREATER_THAN, 5)},
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False
+
+
+def test_projection_rejected_when_cached_dims_subset_not_superset() -> None:
+    # cached has just [a]; new wants [a, b] — finer-grained data unavailable
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A, COL_B],
+        cached_dimensions=[COL_A],
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False

@@ -50,10 +50,12 @@ import pyarrow as pa
 from flask import current_app
 from superset_core.semantic_layers.types import (
     AdhocExpression,
+    AggregationType,
     Dimension,
     Filter,
     Metric,
     Operator,
+    OrderDirection,
     OrderTuple,
     PredicateType,
     SemanticQuery,
@@ -64,12 +66,21 @@ from superset_core.semantic_layers.types import (
 from superset.extensions import cache_manager
 from superset.utils import json
 from superset.utils.hashing import hash_from_str
+from superset.utils.pandas_postprocessing.aggregate import aggregate
 
 logger = logging.getLogger(__name__)
 
 INDEX_KEY_PREFIX = "sv:idx:"
 VALUE_KEY_PREFIX = "sv:val:"
 MAX_ENTRIES_PER_SHAPE = 32
+
+_AGGREGATION_TO_PANDAS: dict[AggregationType, str] = {
+    AggregationType.SUM: "sum",
+    AggregationType.COUNT: "sum",
+    AggregationType.MIN: "min",
+    AggregationType.MAX: "max",
+}
+ADDITIVE_AGGREGATIONS = frozenset(_AGGREGATION_TO_PANDAS)
 
 
 @dataclass(frozen=True)
@@ -84,6 +95,7 @@ class ViewMeta:
 @dataclass(frozen=True)
 class CachedEntry:
     filters: frozenset[Filter]
+    dimension_keys: frozenset[str]
     limit: int | None
     offset: int
     order_key: str
@@ -113,14 +125,16 @@ def try_serve_from_cache(
         served: SemanticResult | None = None
         for entry in entries:
             if served is None:
-                ok, leftovers = can_satisfy(entry, query)
+                ok, leftovers, projection_needed = can_satisfy(entry, query)
                 if ok:
                     payload = cache.get(entry.value_key)
                     if payload is None:
                         # value evicted but index entry survived; drop it
                         continue
                     pruned.append(entry)
-                    served = _apply_post_processing(payload, query, leftovers)
+                    served = _apply_post_processing(
+                        payload, query, leftovers, projection_needed
+                    )
                     continue
             # keep entry; verify its value is still alive
             if cache.get(entry.value_key) is not None:
@@ -150,6 +164,7 @@ def store_result(
         entries: list[CachedEntry] = list(cache.get(idx_key) or [])
         entry = CachedEntry(
             filters=frozenset(query.filters or set()),
+            dimension_keys=frozenset(_dimension_key(d) for d in query.dimensions),
             limit=query.limit,
             offset=query.offset or 0,
             order_key=_order_key(query.order),
@@ -173,10 +188,10 @@ def store_result(
 
 
 def shape_key(view_meta: ViewMeta, query: SemanticQuery) -> str:
-    shape = {
-        "m": sorted(m.id for m in query.metrics),
-        "d": sorted(_dimension_key(d) for d in query.dimensions),
-    }
+    # The shape key buckets entries by metric set only; dimensions live on each
+    # ``CachedEntry`` so we can find broader (dimension-superset) entries via the
+    # projection path.
+    shape = {"m": sorted(m.id for m in query.metrics)}
     digest = hash_from_str(json.dumps(shape, sort_keys=True))[:16]
     return f"{INDEX_KEY_PREFIX}{view_meta.uuid}:{view_meta.changed_on_iso}:{digest}"
 
@@ -270,26 +285,42 @@ def _timeout(view_meta: ViewMeta) -> int | None:
 def can_satisfy(  # noqa: C901
     entry: CachedEntry,
     query: SemanticQuery,
-) -> tuple[bool, set[Filter]]:
-    """Return ``(reusable, leftover_filters_to_apply)`` for ``entry`` vs ``query``."""
+) -> tuple[bool, set[Filter], bool]:
+    """
+    Return ``(reusable, leftover_filters, projection_needed)`` for ``entry`` vs
+    ``query``. ``projection_needed`` is True when the cached entry has a strict
+    superset of the new dimensions and a pandas rollup is required.
+    """
+    new_dim_keys = frozenset(_dimension_key(d) for d in query.dimensions)
+    cached_dim_keys = entry.dimension_keys
+
+    if cached_dim_keys == new_dim_keys:
+        projection_needed = False
+    elif cached_dim_keys > new_dim_keys:
+        projection_needed = True
+        if not _projection_allowed(entry, query, new_dim_keys, cached_dim_keys):
+            return False, set(), False
+    else:
+        return False, set(), False
+
     new_filters = frozenset(query.filters or set())
 
     c_adhoc, c_having, c_where = _split(entry.filters)
     n_adhoc, n_having, n_where = _split(new_filters)
 
     if c_adhoc != n_adhoc:
-        return False, set()
+        return False, set(), False
     if c_having != n_having:
-        return False, set()
+        return False, set(), False
 
     c_by_col = _group_by_column(c_where)
     n_by_col = _group_by_column(n_where)
 
-    for col_id, c_list in c_by_col.items():
-        n_list = n_by_col.get(col_id, [])
+    for c_list in c_by_col.values():
         for c in c_list:
+            n_list = n_by_col.get(_filter_col_id(c), [])
             if not any(_implies(n, c) for n in n_list):
-                return False, set()
+                return False, set(), False
 
     leftovers: set[Filter] = set()
     for col_id, n_list in n_by_col.items():
@@ -297,27 +328,72 @@ def can_satisfy(  # noqa: C901
         for n in n_list:
             if not any(_implies(c, n) for c in c_list):
                 if n.column is None or n.operator == Operator.ADHOC:
-                    return False, set()
+                    return False, set(), False
                 leftovers.add(n)
 
-    projection_ids = _projection_ids(query)
+    # Leftover filters are applied to the cached DataFrame BEFORE the optional
+    # rollup, so their columns must be present in the cached projection.
+    allowed_ids = _cached_column_ids(entry, query)
     for leftover in leftovers:
-        if leftover.column is None or leftover.column.id not in projection_ids:
-            return False, set()
+        if leftover.column is None or leftover.column.id not in allowed_ids:
+            return False, set(), False
 
     if entry.offset != 0 or (query.offset or 0) != 0:
-        return False, set()
+        return False, set(), False
 
+    if projection_needed:
+        # Re-aggregation will re-order by ``query.order`` after rollup, so the
+        # cached order is irrelevant. We do require the new order (if any) to
+        # reference only surviving columns; otherwise sort would fail post-rollup.
+        if not _order_uses_only(query.order, _projection_ids(query)):
+            return False, set(), False
+    else:
+        if entry.limit is not None:
+            if query.limit is None or query.limit > entry.limit:
+                return False, set(), False
+            if entry.order_key != _order_key(query.order):
+                return False, set(), False
+
+        if entry.group_limit_key != _group_limit_key(query.group_limit):
+            return False, set(), False
+
+    return True, leftovers, projection_needed
+
+
+def _projection_allowed(
+    entry: CachedEntry,
+    query: SemanticQuery,
+    new_dim_keys: frozenset[str],
+    cached_dim_keys: frozenset[str],
+) -> bool:
+    """
+    Gates for the projection path (above and beyond filter containment).
+    """
+    if any(m.aggregation not in ADDITIVE_AGGREGATIONS for m in query.metrics):
+        return False
+    # Cached truncation makes the rollup unsafe (we're missing rows).
     if entry.limit is not None:
-        if query.limit is None or query.limit > entry.limit:
-            return False, set()
-        if entry.order_key != _order_key(query.order):
-            return False, set()
+        return False
+    if entry.group_limit_key:
+        return False
+    # Cached HAVING dropped sub-aggregate rows; the rolled-up totals would be
+    # off. Conservative: skip the projection path when cached has any HAVING.
+    if any(f.type == PredicateType.HAVING for f in entry.filters):
+        return False
+    return True
 
-    if entry.group_limit_key != _group_limit_key(query.group_limit):
-        return False, set()
 
-    return True, leftovers
+def _filter_col_id(f: Filter) -> str | None:
+    return f.column.id if f.column is not None else None
+
+
+def _order_uses_only(
+    order: list[OrderTuple] | None,
+    allowed_ids: set[str],
+) -> bool:
+    if not order:
+        return True
+    return all(_orderable_id(element) in allowed_ids for element, _ in order)
 
 
 def _split(
@@ -346,6 +422,12 @@ def _group_by_column(filters: Iterable[Filter]) -> dict[str | None, list[Filter]
 
 def _projection_ids(query: SemanticQuery) -> set[str]:
     return {d.id for d in query.dimensions} | {m.id for m in query.metrics}
+
+
+def _cached_column_ids(entry: CachedEntry, query: SemanticQuery) -> set[str]:
+    """Column ids available in the cached DataFrame (cached dims + shared metrics)."""
+    cached_dim_ids = {key.rsplit("@", 1)[0] for key in entry.dimension_keys}
+    return cached_dim_ids | {m.id for m in query.metrics}
 
 
 # ---------------------------------------------------------------------------
@@ -522,9 +604,10 @@ def _apply_post_processing(
     cached: SemanticResult,
     query: SemanticQuery,
     leftovers: set[Filter],
+    projection_needed: bool,
 ) -> SemanticResult:
-    """Apply leftover filters and the new limit to a cached result."""
-    if not leftovers and query.limit is None:
+    """Apply leftover filters, projection (re-aggregation), order, and limit."""
+    if not leftovers and not projection_needed and query.limit is None:
         return cached
 
     df = cached.results.to_pandas()
@@ -533,15 +616,52 @@ def _apply_post_processing(
         for f in leftovers:
             mask &= _mask_for(df, f)
         df = df[mask]
+
+    note_def = "Served from semantic view smart cache (post-processed locally)"
+    if projection_needed:
+        groupby = [d.name for d in query.dimensions]
+        aggregates = {
+            m.name: {
+                "column": m.name,
+                "operator": _AGGREGATION_TO_PANDAS[
+                    # Guarded by ``_projection_allowed`` — non-None and additive.
+                    m.aggregation  # type: ignore[index]
+                ],
+            }
+            for m in query.metrics
+        }
+        df = aggregate(df, groupby=groupby, aggregates=aggregates)
+        df = _apply_order(df, query.order)
+        note_def = "Served from semantic view smart cache (re-aggregated locally)"
+
     if query.limit is not None:
         df = df.head(query.limit)
 
     table = pa.Table.from_pandas(df, preserve_index=False)
-    note = SemanticRequest(
-        type="cache",
-        definition="Served from semantic view smart cache (post-processed locally)",
-    )
+    note = SemanticRequest(type="cache", definition=note_def)
     return SemanticResult(requests=list(cached.requests) + [note], results=table)
+
+
+def _apply_order(
+    df: pd.DataFrame,
+    order: list[OrderTuple] | None,
+) -> pd.DataFrame:
+    if not order:
+        return df
+    available: list[tuple[str, bool]] = []
+    for element, direction in order:
+        col = _orderable_id_name(element)
+        if col in df.columns:
+            available.append((col, direction == OrderDirection.ASC))
+    if not available:
+        return df
+    cols = [col for col, _ in available]
+    asc = [a for _, a in available]
+    return df.sort_values(by=cols, ascending=asc).reset_index(drop=True)
+
+
+def _orderable_id_name(element: Metric | Dimension | AdhocExpression) -> str:
+    return getattr(element, "name", element.id)
 
 
 def _mask_for(df: pd.DataFrame, f: Filter) -> pd.Series:  # noqa: C901
