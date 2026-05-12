@@ -736,25 +736,67 @@ def build_one(
 
     # TODO(future): procedural/
 
-    # Write transformed GeoJSON to an intermediate path, then run
-    # mapshaper -simplify into the final output. Two-stage approach so
-    # the Python transforms work on full-resolution geometry.
     wv_label = worldview or "default"
+
+    if admin_level == 1:
+        # Per-country split: each chart loads only its country's data
+        # (~50KB-1MB) instead of the full ~15MB global Admin 1 layer.
+        country_outputs = _write_admin1_per_country(geo, wv_label, simplify_pct=5.0)
+        log(
+            f"  wrote {len(country_outputs)} per-country Admin 1 files "
+            f"(total {sum(p.stat().st_size for p in country_outputs):,} bytes)"
+        )
+        raw.unlink()
+        return country_outputs[0] if country_outputs else raw  # placeholder return
+
+    # Admin 0: single global file (one feature per country = small enough)
     transformed = OUTPUT_DIR / f"_transformed_{wv_label}_admin{admin_level}.geo.json"
     transformed.write_text(json.dumps(geo))
-
     final = OUTPUT_DIR / f"{wv_label}_admin{admin_level}.geo.json"
     simplify_geojson(transformed, final, percentage=5.0)
-
-    final_size = final.stat().st_size
-    pre_size = transformed.stat().st_size
-    reduction = 100 * (1 - final_size / pre_size) if pre_size else 0
-    log(f"  wrote {final.name} ({final_size:,} bytes, "
-        f"{len(geo['features'])} features, simplified -{reduction:.0f}%)")
-
+    log(f"  wrote {final.name} ({final.stat().st_size:,} bytes, "
+        f"{len(geo['features'])} features)")
     raw.unlink()
     transformed.unlink()
     return final
+
+
+def _write_admin1_per_country(
+    geo: dict,
+    wv_label: str,
+    simplify_pct: float = 5.0,
+) -> list[Path]:
+    """Split global Admin 1 into one GeoJSON per country, each simplified."""
+    from collections import defaultdict
+
+    by_country: dict[str, list[dict]] = defaultdict(list)
+    for f in geo["features"]:
+        a3 = f["properties"].get("adm0_a3")
+        if a3:
+            by_country[a3].append(f)
+
+    outputs: list[Path] = []
+    for a3, features in sorted(by_country.items()):
+        if len(features) < 2:
+            # Single-subdivision countries are useless as choropleths.
+            continue
+        country_geo = {"type": "FeatureCollection", "features": features}
+        inter = OUTPUT_DIR / f"_admin1_{a3}_{wv_label}_pre.geo.json"
+        inter.write_text(json.dumps(country_geo))
+        out = OUTPUT_DIR / f"{wv_label}_admin1_{a3}.geo.json"
+        subprocess.run(
+            [
+                "npx", "--yes", "mapshaper",
+                str(inter),
+                "-simplify", f"{simplify_pct}%", "keep-shapes",
+                "-o", str(out), "format=geojson",
+            ],
+            check=True,
+            stderr=subprocess.DEVNULL,
+        )
+        inter.unlink()
+        outputs.append(out)
+    return outputs
 
 
 def main() -> int:
