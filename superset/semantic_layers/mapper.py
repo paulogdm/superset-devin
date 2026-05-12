@@ -26,7 +26,7 @@ single dataframe.
 
 from datetime import datetime, timedelta
 from time import time
-from typing import Any, cast, Sequence, TypeGuard
+from typing import Any, Callable, cast, Sequence, TypeGuard
 
 import isodate
 import numpy as np
@@ -55,6 +55,11 @@ from superset.common.utils.time_range_utils import get_since_until_from_query_ob
 from superset.connectors.sqla.models import BaseDatasource
 from superset.constants import NO_TIME_RANGE
 from superset.models.helpers import QueryResult
+from superset.semantic_layers.cache import (
+    store_result,
+    try_serve_from_cache,
+    ViewMeta,
+)
 from superset.superset_typing import AdhocColumn
 from superset.utils.core import (
     FilterOperator,
@@ -112,13 +117,15 @@ def get_results(query_object: QueryObject) -> QueryResult:
         else semantic_view.get_table
     )
 
+    cached_dispatch = _make_cached_dispatch(query_object, dispatcher)
+
     # Step 1: Convert QueryObject to list of SemanticQuery objects
     # The first query is the main query, subsequent queries are for time offsets
     queries = map_query_object(query_object)
 
     # Step 2: Execute the main query (first in the list)
     main_query = queries[0]
-    main_result = dispatcher(main_query)
+    main_result = cached_dispatch(main_query)
 
     main_df = main_result.results.to_pandas()
 
@@ -149,7 +156,7 @@ def get_results(query_object: QueryObject) -> QueryResult:
         strict=False,
     ):
         # Execute the offset query
-        result = dispatcher(offset_query)
+        result = cached_dispatch(offset_query)
 
         # Add this query's requests to the collection
         all_requests.extend(result.requests)
@@ -203,6 +210,37 @@ def get_results(query_object: QueryObject) -> QueryResult:
         query_object,
         duration,
     )
+
+
+def _make_cached_dispatch(
+    query_object: ValidatedQueryObject,
+    dispatcher: Callable[[SemanticQuery], SemanticResult],
+) -> Callable[[SemanticQuery], SemanticResult]:
+    """
+    Wrap the semantic view dispatcher with a containment-aware cache.
+
+    Row-count queries bypass the cache. Cache failures are logged and the
+    dispatcher is called as if the cache were absent.
+    """
+    if query_object.is_rowcount:
+        return dispatcher
+
+    view = query_object.datasource
+    changed_on = getattr(view, "changed_on", None)
+    view_meta = ViewMeta(
+        uuid=str(view.uuid),
+        changed_on_iso=changed_on.isoformat() if changed_on else "",
+        cache_timeout=getattr(view, "cache_timeout", None),
+    )
+
+    def cached_dispatch(query: SemanticQuery) -> SemanticResult:
+        if (hit := try_serve_from_cache(view_meta, query)) is not None:
+            return hit
+        result = dispatcher(query)
+        store_result(view_meta, query, result)
+        return result
+
+    return cached_dispatch
 
 
 def map_semantic_result_to_query_result(
