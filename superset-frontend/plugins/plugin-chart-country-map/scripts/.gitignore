@@ -1,0 +1,6 @@
+# Build cache (downloaded NE shapefiles)
+.cache/
+
+# Build outputs (regenerated; not committed at the script-dir level —
+# the eventual location for shipped GeoJSON is the plugin's src/data/)
+output/
