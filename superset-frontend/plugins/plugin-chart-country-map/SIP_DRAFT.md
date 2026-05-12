@@ -371,6 +371,40 @@ Ran a per-fix check against `ne_10m_admin_1_states_provinces.shp` (current). Fin
 - **Russia Chukchi antimeridian fix is likely obsolete.** NE has split Chukchi into properly-bounded polygons. We need to verify the new plugin's D3 projection handles them correctly at render time, but the data is in good shape.
 - **Net design surface shrinks:** the 6 NEW config files I sketched in the audit collapse to **4 NEW** (`territory_assignments`, `regional_aggregations`, `composite_maps`, plus the existing `name_overrides`/`flying_islands`/`iso_overrides`). One less config file, one less ongoing maintenance burden, no third-party data dependencies in-tree.
 
+### Procedural escape hatch for edge cases
+
+Most touchups fit cleanly in declarative YAML (typos, ISO codes, repositions, dissolves, composites). A few don't — e.g., the France-with-Overseas notebook drops the *second sub-polygon* of the Windward Islands feature by array index to avoid visual conflict with Corsica. Forcing every such case into the YAML schema would bloat it.
+
+**Solution: small `procedural/` directory of named, single-purpose Python scripts** as an escape hatch, run by the build orchestrator after the YAML transforms.
+
+```
+scripts/country-maps/
+  build.sh                                # orchestrator
+  config/                                 # declarative — handles 95%
+    name_overrides.yaml
+    flying_islands.yaml
+    territory_assignments.yaml
+    regional_aggregations.yaml
+    composite_maps.yaml
+  procedural/                             # escape hatch — handles the rare 5%
+    README.md                             # when to use, when not
+    01_fix_windward_islands_geometry.py
+    # ... future numbered one-offs
+```
+
+Each procedural script is:
+- Single-purpose, named after what it does
+- Has a header comment explaining *why* this couldn't be expressed in YAML
+- Takes a geo input path, mutates, writes — clear in/out interface
+- Numbered prefix for deterministic execution order
+- Easily reviewable in PR (one fix per file, no kernel state, no cell ordering)
+
+Why this is much better than the notebook:
+- Each fix is a separate file → conflicts localize to one fix at a time
+- No kernel state, no output churn, pure functions on data
+- Naming forces documentation; reviewers can see what's added/removed at a glance
+- Bounded growth: a `procedural/` directory with 50 files is annoying enough to be a signal to push fixes back into YAML or upstream into NE. The notebook never had this signal — it just bloated.
+
 ### What still requires manual attention going forward
 
 The fixes that survive (France typos/ISO codes, Philippines admin renames, China+SARs, Finland+Åland, regional aggregations, composite maps, flying islands) are all relatively **stable** — they don't change year over year. Once ported to YAML, the maintenance cost is roughly: "watch for new disputed-region PRs (handle via worldview switch) + occasional admin-name updates (one-line YAML edit)". Way better than the notebook treadmill.
