@@ -27,7 +27,13 @@
 #           match: { name: <feature name>, ... }
 #           offset: [x, y]
 #           scale: <number>                # optional
-#           drop_parts: [<int>, ...]       # optional; drop specific sub-polygon indices
+#           drop_parts: [<int>, ...]       # optional; drop sub-polygon indices
+#           group: true                    # optional; if match yields multiple
+#                                          # features, transform them as a single
+#                                          # MultiPolygon then split back out
+#                                          # (preserves per-feature attributes)
+#                                          # Used for metropolitan-area zoom-ins
+#                                          # like Paris + petite couronne
 #       additions:                         # features pulled from other Admin 0 records
 #         - description: human-readable
 #           from:
@@ -38,6 +44,10 @@
 #           reposition:
 #             offset: [x, y]
 #             scale: <number>              # optional
+#           set:                           # optional; override attributes on
+#             name: <new name>             # the added/dissolved feature
+#             iso_3166_2: <code>
+#             [...]
 
 composites:
 
@@ -78,10 +88,23 @@ composites:
         match: { name: Mayotte }
         offset: [-50.5, 52.2]
         scale: 2.0
+
+      # Paris + petite couronne — metropolitan zoom-in.
+      # The 4 inner Paris-region departments are tiny and overlap visually
+      # at country scale. Group them into one MultiPolygon, translate up
+      # and right, scale 3x to make them visible. Splits back into 4
+      # individual features after transform (preserving attrs).
+      - description: Zoom in on Paris and the petite couronne (Hauts-de-Seine, Seine-Saint-Denis, Val-de-Marne)
+        match:
+          name: { in: ["Paris", "Hauts-de-Seine", "Seine-Saint-Denis", "Val-de-Marne"] }
+        group: true
+        offset: [6.3, 2.3]
+        scale: 3.0
+
     additions:
       # French Polynesia — only the Windward Islands (Tahiti area), and
-      # we drop the second sub-polygon to avoid visual conflict with
-      # Corsica when laid out.
+      # we drop the second sub-polygon (Rimatuu) to avoid visual conflict
+      # with Corsica when laid out.
       - description: Add Tahiti (Windward Islands) from French Polynesia, drop Rimatuu sub-polygon
         from:
           adm0_a3: PYF
@@ -90,6 +113,9 @@ composites:
         reposition:
           offset: [158.2, 57.3]
           scale: 2.0
+        set:
+          name: "Polynésie française"
+          iso_3166_2: FR-PF
 
       # French Southern and Antarctic Lands — Kerguelen Islands only.
       - description: Add Archipel des Kerguelen from French Southern Lands
@@ -99,6 +125,9 @@ composites:
         reposition:
           offset: [-63.5, 88.5]
           scale: 0.9
+        set:
+          name: "Terres australes et antarctiques françaises"
+          iso_3166_2: FR-TF
 
       # Wallis and Futuna — dissolve Alo + Uvea into one shape.
       - description: Add Wallis and Futuna (dissolved)
@@ -108,6 +137,9 @@ composites:
         reposition:
           offset: [170, 52.5]
           scale: 4.0
+        set:
+          name: "Wallis et Futuna"
+          iso_3166_2: FR-WF
 
       # New Caledonia — dissolve all subdivisions.
       - description: Add New Caledonia (dissolved)
@@ -117,14 +149,42 @@ composites:
         reposition:
           offset: [-165.5, 60.4]
           scale: 0.4
+        set:
+          name: "Nouvelle-Calédonie"
+          iso_3166_2: FR-NC
 
       # Saint-Pierre and Miquelon — dissolved
-      # NOTE: notebook cell 63 was truncated in the audit; offsets TBD
-      # during build script implementation. Placeholder values below.
-      - description: Add Saint-Pierre and Miquelon (dissolved)
+      - description: Add Saint-Pierre-et-Miquelon (dissolved)
         from:
           adm0_a3: SPM
           dissolve: true
         reposition:
-          offset: [0, 0]      # TODO: extract from full notebook cell
-          scale: 1.0
+          offset: [48, 4]
+          scale: 3.0
+        set:
+          name: "Saint-Pierre-et-Miquelon"
+          iso_3166_2: FR-PM
+
+      # Saint Martin (French part) — small Caribbean island
+      - description: Add Saint Martin (French part)
+        from:
+          adm0_a3: MAF
+          match: { admin: "Saint Martin" }
+        reposition:
+          offset: [54.8, 30.3]
+          scale: 5.0
+        set:
+          name: "Saint-Martin"
+          iso_3166_2: FR-MF
+
+      # Saint Barthélémy — small Caribbean island, scaled up significantly
+      - description: Add Saint Barthélémy (heavily scaled — it's tiny)
+        from:
+          adm0_a3: BLM
+          match: { admin: "Saint Barthelemy" }
+        reposition:
+          offset: [54.5, 30]
+          scale: 8.0
+        set:
+          name: "Saint-Barthélémy"
+          iso_3166_2: FR-BL
