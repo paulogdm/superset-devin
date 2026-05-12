@@ -191,24 +191,181 @@ These are micro-territories that don't materially affect a country-level choropl
 
 The 9 dropped micro-territories are a non-issue for choropleth visualization.
 
+## Notebook audit: existing touchups and how the new design covers them
+
+Audit of `superset-frontend/plugins/legacy-plugin-chart-country-map/scripts/Country Map GeoJSON Generator.ipynb` (96 cells). Categorized below to confirm the new design has a home for each kind of work the notebook does.
+
+Status legend:
+- ✅ **Covered** — handled cleanly by the new design as currently sketched
+- 🟡 **Needs config** — handled, but requires entries in YAML config files that we'll need to port
+- 🟠 **Needs new feature** — design needs an addition before this works
+- ⚪ **Can become obsolete** — current NE may have fixed the underlying problem; verify per case
+
+### Category 1 — Data ingestion and scale blending ✅
+
+Notebook downloads NE Admin 0 + Admin 1 at 10m and 50m, blends them (uses 50m for some large countries to cap file size). New `build.sh` does the same; mapshaper handles per-country `-simplify` more cleanly than the notebook's hand-tuned switch.
+
+### Category 2 — Country list curation 🟡 → ✅
+
+Cell 12 hand-curates ~190 countries with an alias dict (`korea`→`south korea`, etc.) and inline comments documenting why some entries are commented out (territories that NE rolls into a parent country). New design generates this list deterministically from NE's ISO_A3 codes; aliases handled by the `name_language` field. Auto-purge of single-subdivision countries (cell 89) becomes a build-script default.
+
+### Category 3 — Flying islands repositioning 🟡 (config-driven)
+
+The biggest category. Each `reposition()` call translates and scales a far-flung territory to fit within or near the mainland viewport. Maps to `flying_islands.yaml` entries (one per country/territory):
+
+| Country | Territories repositioned | Cell |
+|---------|--------------------------|------|
+| **USA** | Hawaii, Alaska | 19 |
+| **Norway** | Svalbard | 34 |
+| **Portugal** | Azores, Madeira (with extra `simplify=0.015`) | 37 |
+| **Spain** | Las Palmas, Santa Cruz de Tenerife (Canary Islands) | 40 |
+| **France** | Guadeloupe, Martinique, Guyane française, La Réunion, Mayotte | 56 |
+
+Each entry encodes `(territory_id, x_offset, y_offset, x_scale, y_scale, simplify?)`. Build script applies them.
+
+D3 composite projections (e.g. `geoAlbersUsa`, `geoConicEqualAreaFrance`) handle some of these natively at *render* time without geometry mutation — worth offering as an alternative path per-country where available.
+
+### Category 4 — Antimeridian fix 🟡 → ✅
+
+Cell 44's `shift_geom` splits Russia's Chukchi Autonomous Okrug at the 180° meridian and translates the eastern part by +360° so it renders contiguously. **Mapshaper has `-clip` and `-affine` operators that do this cleanly.** Single use case currently (Russia/Chukchi); if more crop up, generalize.
+
+### Category 5 — Bounds clipping 🟡 (config-driven)
+
+Cells 69-71, 76: `apply_bounds(df, NW, SE)` filters out features whose geometries don't fit a bbox. Used for:
+
+| Country | Bounding box | Purpose | Cell |
+|---------|--------------|---------|------|
+| **Netherlands** | NW=(-20, 60), SE=(20, 20) | Drop Caribbean territories (Bonaire, Sint Eustatius, Saba, ABC islands) | 71 |
+| **UK** | NW=(-10, 60), SE=(20, 20) | Drop British Overseas Territories | 76 |
+
+These overlap conceptually with flying islands. Decision: same `flying_islands.yaml` config, with two action modes — `drop` (current bounds-clip behavior) or `reposition` (current reposition behavior). Tied to the per-chart "Show flying islands" toggle.
+
+### Category 6 — Adding territories to a country 🟠 (needs new feature)
+
+The notebook has cases where it *adds* features to a country that NE has as a separate Admin 0 entity:
+
+| Country | Added territories | Cell |
+|---------|-------------------|------|
+| **China** | Taiwan (CN-71), Hong Kong (CN-91), Macau (CN-92) — with Chinese names | 21-22 |
+| **Finland** | Åland (FI-01) — with Finnish name | 25-26 |
+| **Ukraine** | Crimea (UA-43), Sevastopol (UA-40) — moved from Russia | 28 |
+
+**The Ukraine case is now handled by worldview selection (NE `_ukr` does this for free).**
+
+The China and Finland cases are *editorial decisions*, not worldview decisions — NE genuinely has Taiwan as separate Admin 0, Åland as separate Admin 0, etc. We need a `territory_assignments.yaml` config that says "for the China Admin 1 view, also include features X, Y, Z from these other Admin 0 records, with these renamed iso codes". This is a real new feature in the build pipeline. Not hard to implement.
+
+### Category 7 — Reassigning territories ✅ (covered by worldview)
+
+The Crimea/Sevastopol move from Russia to Ukraine (cell 28) is exactly what UA worldview gives us for free. Confirmed by spike. **No config or code needed for this case in the new design.** Other reassignments (if they emerge) would also be candidates for worldview switches first, `territory_assignments.yaml` second.
+
+### Category 8 — External GeoJSON replacement 🟠 (needs new feature, or work to obsolete)
+
+The notebook fully bypasses NE for three countries by downloading third-party GeoJSON files:
+
+| Country | Source | Why | Cell |
+|---------|--------|-----|------|
+| **India** | `geohacker/india` (Kashmir + Ladakh state shapes) | NE's India subdivisions deemed inadequate for J&K/Ladakh | 30 |
+| **Latvia** | `eriks47/latvia` | NE's Latvia subdivisions deemed inadequate | 73 |
+| **Philippines** | `jdruii/phgeojson` | NE's Philippines subdivisions deemed inadequate | 78 |
+
+This is the gnarliest category. Two paths:
+
+1. **Vendor the third-party GeoJSON in-tree** under `scripts/country-maps/external/` and have the build script merge them with the NE outputs. Config entry per country specifies the source file + which NE features it replaces.
+2. **Verify that current NE 5.x has improved** for these countries — possibly some of these hacks are obsolete. If so, drop the override, accept what NE ships.
+
+Action: per-country verification spike before the SIP locks in. If even one needs to stay, we ship path 1 as a first-class config layer (`external_overrides.yaml`).
+
+### Category 9 — Name fixes (typos, encoding, native names) 🟡 (config-driven)
+
+Three sub-cases:
+
+- **Typo fixes**: France (Seien→Seine, Haute→Haut), iso_3166_2 corrections (FR-75→FR-75C, FR-GP→FR-971, etc.) — cell 55
+- **Native script / diacritics**: Vietnam (~12 city names with Vietnamese diacritics) — cell 86; China SAR Chinese names; Finland Åland Finnish name
+- **Administrative renames**: Philippines (Dinagat→Caraga, ARMM→BARMM) — cell 83
+
+All map to entries in `name_overrides.yaml` keyed by ISO code. The native script cases might also be obsoleted by exposing NE's `NAME_<lang>` fields directly via the `name_language` selector — verify per case.
+
+### Category 10 — Region aggregation (Admin 1 → administrative regions) 🟠 (needs new feature)
+
+Notebook builds *intermediate* admin levels by dissolving Admin 1 into administrative regions:
+
+| Country | Aggregation | Source |
+|---------|-------------|--------|
+| **Turkey** | NUTS-1 (12 statistical regions) — manually-coded city→region dict | Cell 48 |
+| **France** | Administrative regions (dissolved from departments) | Cell 58-59 |
+| **Italy** | Regions (dissolved from provinces) | Cell 66 |
+| **Philippines** | Regions (dissolved from provinces) | Cell 81-82 |
+
+Currently each is its own special case. Generalize via a `regional_aggregations.yaml` config: per (country, region_set_name), specify the mapping (Admin 1 ISO → region code + region name). Build script dissolves accordingly. New plugin exposes this as a third "admin level" option (`Admin 0 / Admin 1 / Aggregated regions`) when one is defined for the selected country.
+
+This is a real feature, not just config porting. Worth calling out in the SIP as in-scope-but-distinct.
+
+### Category 11 — Composite multi-country maps 🟠 (needs new feature, or punt)
+
+Cell 63 ("France with Overseas") assembles a single map combining features from multiple Admin 0 entities (France + French Polynesia + French Southern Lands + Wallis-Futuna + New Caledonia + Saint-Pierre), each repositioned + dissolved. This is unique to the notebook.
+
+Three paths:
+
+1. **First-class composite-map support**: define `composite_maps.yaml` with rules for which Admin 0 records contribute to a composite, plus per-territory reposition rules. Build script generates a single composite GeoJSON.
+2. **Punt to "France" + "France with Overseas" as two distinct map options**, where the second is hand-curated upstream of the build pipeline. Smaller scope but loses the elegance.
+3. **Drop France-with-Overseas entirely** in the new plugin and let users use the regular France map; document the loss in UPDATING.md.
+
+I'd argue **path 1** is small enough to fit the SIP scope and the cleanest answer. Builds reuse the same flying-islands + territory-assignment primitives. Path 3 would lose a feature people use.
+
+### Category 12 — Geometry simplification ✅
+
+Cell 90: hand-tuned `simplify_factors` per country, plus a size-based default. Mapshaper does this better with `-simplify` per layer. Build script per-country override config if needed.
+
+### Category 13 — Output formatting ✅
+
+Cell 90/94: writes per-country GeoJSON files plus a TypeScript `countries.ts` index with display-name overrides. New plugin generates the index from a known list of (worldview × admin level × country) tuples; display-name overrides become entries in `name_overrides.yaml`.
+
+Backward-compatibility column rename (`iso_3166_2` → `ISO`, `name` → `NAME_1`) at the legacy plugin's data layer is a thing the new plugin doesn't need to inherit (we control both producer and consumer).
+
+### Category 14 — Quality filtering ✅
+
+Cell 89: auto-purge countries with only one subdivision. Becomes a build-script default. Already noted under Category 2.
+
+### Summary of what the new design needs to add
+
+To be a strict superset of the notebook's capabilities, the new design needs these config files / pipeline features beyond what's already sketched:
+
+1. **`name_overrides.yaml`** ✅ (already in plan) — covers categories 2, 9, 13
+2. **`flying_islands.yaml`** ✅ (already in plan, but extend with `drop|reposition` action modes) — covers categories 3, 5
+3. **`territory_assignments.yaml`** 🟠 (NEW) — for adding features from other Admin 0 records (China + SARs, Finland + Åland) — covers category 6
+4. **`regional_aggregations.yaml`** 🟠 (NEW) — for Admin 1 → administrative-region dissolves (Turkey NUTS-1, France/Italy/Philippines regions) — covers category 10
+5. **`composite_maps.yaml`** 🟠 (NEW) — for France-with-overseas-style multi-country composites — covers category 11
+6. **`external_overrides.yaml`** 🟠 (NEW, possibly obsolete) — for India/Latvia/Philippines third-party GeoJSON replacements — covers category 8 (verify per case)
+7. **Antimeridian handling** ✅ (mapshaper primitives)
+
+The four `🟠 NEW` items are the design surface this audit added beyond what we'd already discussed. None of them are large; each is a config-driven build-script transform.
+
 ## Open questions
 
-1. **Default worldview confirmation.** Recommendation is `ukr`. Acceptable to ship that wholesale, or do we want a more granular `default_overrides` overlay model (NE Default + selectively swap Crimea geometry from `_ukr`)? The latter is more code but more editorially neutral on the non-Crimea pieces.
-2. **Backward compat for legacy plugin's hand-tuned files.** Some current per-country files include touchups that diverged from NE (notebook-applied). Audit list and decide which become entries in `name_overrides.yaml` / `flying_islands.yaml`.
-3. **Admin 1 country coverage.** NE Admin 1 covers ~all countries but quality varies. Decide which countries are first-class supported (probably a curated list initially, opening up as we validate).
-4. **Plugin scaffolding pattern.** Match modern plugin pattern (mirror `plugin-chart-pivot-table` or similar)? Or modify in-flight as we go.
-5. **Smoke-test fixtures.** Three test cases that exercise the design:
+1. **Default worldview confirmation.** Recommendation is `ukr`. Acceptable to ship that wholesale, or do we want a more granular `default_overrides` overlay model (NE Default + selectively swap Crimea geometry from `_ukr`)? The latter is more code but more editorially neutral on the non-Crimea pieces. — **resolved: ship `ukr` wholesale**
+2. **External GeoJSON overrides (notebook category 8).** India, Latvia, Philippines currently replace NE entirely with third-party GeoJSON. Per-country verification needed: are these still required against current NE 5.x, or has NE caught up? If even one needs to stay, we need to design `external_overrides.yaml` as a first-class config layer.
+3. **Composite maps (notebook category 11).** France-with-Overseas combines features from 6 different Admin 0 records. Three options: build first-class `composite_maps.yaml` support, ship hand-curated alternatives, or drop the feature entirely. **Lean: first-class config support.**
+4. **Regional aggregations (notebook category 10).** Turkey NUTS-1, France/Italy/Philippines regions need a `regional_aggregations.yaml` and a third "admin level" UX option (`Admin 0 / Admin 1 / Aggregated regions`). Confirm scope.
+5. **Admin 1 country coverage.** NE Admin 1 covers ~all countries but quality varies. Decide which countries are first-class supported (probably a curated list initially, opening up as we validate).
+6. **Plugin scaffolding pattern.** Match modern plugin pattern (mirror `plugin-chart-pivot-table` or similar)? Or modify in-flight as we go.
+7. **Smoke-test fixtures.** Five test cases that exercise the design end-to-end:
    - World choropleth (Admin 0, default worldview, no filters)
-   - US states (Admin 1, country=USA, exclude AK+HI, flying islands off)
-   - French departments (Admin 1, country=FRA, exclude overseas territories)
-6. **TLC code.** New file `ne_10m_admin_0_countries_tlc.shp` — what worldview is this? Need to identify before deciding whether to ship it.
+   - US states (Admin 1, country=USA, flying islands ON via Albers composite — Hawaii/Alaska repositioned)
+   - US states (Admin 1, country=USA, flying islands OFF — Hawaii/Alaska dropped, viewport fits to mainland)
+   - French departments (Admin 1, country=FRA, with the France-with-Overseas composite)
+   - Turkey aggregated regions (Admin 1 → NUTS-1, country=TUR)
+8. **TLC code.** New file `ne_10m_admin_0_countries_tlc.shp` — what worldview is this? Need to identify before deciding whether to ship it.
+9. **Verify which notebook fixes are obsolete in current NE.** For each notebook touchup (typos, encoding, geometry replacements), check whether NE 5.x has it correct. Reduces config-file size; smaller surface to maintain.
 
 ## Implementation plan (rough)
 
 ### Phase 1: Data pipeline + spike validation
 - [x] Spike: UA vs Default worldview diff
-- [ ] Audit existing notebook touchups; categorize → keep / drop / port to YAML config
-- [ ] Write `scripts/country-maps/build.sh` (mapshaper-based)
+- [x] Audit existing notebook touchups; categorize → keep / drop / port to YAML config (see "Notebook audit" section)
+- [ ] Per-country obsolescence check: which notebook fixes are no longer needed against current NE 5.x?
+- [ ] Per-country external-GeoJSON check: do India / Latvia / Philippines still need third-party data?
+- [ ] Design + draft `name_overrides.yaml`, `flying_islands.yaml`, `territory_assignments.yaml`, `regional_aggregations.yaml`, `composite_maps.yaml` (and `external_overrides.yaml` if needed)
+- [ ] Write `scripts/country-maps/build.sh` (mapshaper-based) consuming the YAML configs
 - [ ] Generate first batch of GeoJSON outputs (UA + Default + a couple of others)
 - [ ] CI workflow for regeneration
 
