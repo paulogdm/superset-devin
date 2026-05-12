@@ -508,6 +508,65 @@ Done.
 
 **Not yet wired:** real D3 rendering, full control panel, hosting path for the build outputs, legacy plugin deprecation. Each is a discrete next commit.
 
+## Test plan (for the maintainer to validate before merge)
+
+This section accumulates checks the maintainer should run themselves
+rather than trust the agent's "looks right". Items get added as the
+implementation progresses; check them off as verified.
+
+### Build pipeline (data correctness)
+
+- [ ] **Crimea/Sevastopol shown as Ukrainian** in `ukr_admin1_UKR.geo.json` — visually inspect the southern coastline; UKR feature should include the Crimean peninsula extending to ~44.4°N
+- [ ] **France typos fixed**: `ukr_admin1_FRA.geo.json` should contain "Seine-et-Marne" and "Haut-Rhin" (NOT "Seien-et-Marne" or "Haute-Rhin")
+- [ ] **France ISO codes updated**: search FRA features for `iso_3166_2: "FR-75C"` (NOT "FR-75"), `"FR-971"` (NOT "FR-GP"), etc.
+- [ ] **Philippines admin renames**: PHL features should use "Caraga Administrative Region" and "Bangsamoro Autonomous Region in Muslim Mindanao (BARMM)" — not the older names
+- [ ] **China + SARs in Admin 1**: `ukr_admin1_CHN.geo.json` should contain Taiwan (CN-71), Hong Kong (CN-91), Macau (CN-92) as features
+- [ ] **Finland + Åland**: `ukr_admin1_FIN.geo.json` should contain Åland with iso_3166_2 = "FI-01"
+- [ ] **Flying islands repositioned**: USA admin1 should show Hawaii and Alaska repositioned near the lower 48; France admin1 should show DROMs near mainland
+- [ ] **Bbox drops applied**: Netherlands and UK admin1 should NOT show Caribbean / overseas territories
+- [ ] **Regional aggregations**: open `regional_TUR_nuts_1_ukr.geo.json` — should have exactly 12 features named İstanbul, Batı Marmara, Ege, etc.
+- [ ] **France with overseas composite**: `composite_france_overseas_ukr.geo.json` should contain mainland + 5 DROMs + Polynésie française + Kerguelen + Wallis-et-Futuna + Nouvelle-Calédonie + Saint-Pierre-et-Miquelon + Saint-Martin + Saint-Barthélémy + zoomed Paris/petite couronne
+- [ ] **File sizes look sane**: world admin0 ~2 MB, per-country admin1 mostly < 1 MB, regional aggregations ~30 KB
+
+### Visual / cartographic quality (in chart)
+
+- [ ] World choropleth renders with no broken or missing countries
+- [ ] Russia Chukchi region renders as one connected piece (verifies antimeridian-fix obsolescence)
+- [ ] India J&K geometry under `_ukr` worldview matches what Indian-audience users expect — if not, may want to ship `_ind` for India-heavy deployments instead
+- [ ] Per-chart payload sizes feel responsive (no multi-MB downloads on country-level charts)
+- [ ] Tooltips show the right value for each region (verify ISO match between data + GeoJSON)
+- [ ] Cross-filters work bidirectionally (clicking a region filters dashboard)
+
+### Controls UX
+
+- [ ] Worldview selector shows all built worldviews
+- [ ] Picking a different worldview swaps the geometry without re-querying data
+- [ ] Admin level segmented control (0/1/Aggregated) shows/hides the country picker correctly
+- [ ] Region include/exclude actually filters rendered features client-side
+- [ ] Flying islands toggle drops territories when off; viewport refits
+- [ ] Name language selector switches displayed names (e.g. en → fr)
+- [ ] Composite picker exposes France-with-Overseas as a discrete option
+
+### Backward compatibility
+
+- [ ] Existing legacy-plugin-chart-country-map dashboards continue to render unchanged
+- [ ] Legacy plugin shows deprecation banner pointing at the new chart type
+- [ ] "Switch to new Country Map" button creates a new chart with form_data correctly mapped (datasource, metric, color settings preserved; new fields default sensibly)
+- [ ] No DB migrations needed (verify via `superset db upgrade` is a no-op)
+
+### Per-deployment customization (config)
+
+- [ ] `superset_config.COUNTRY_MAP.default_worldview = "default"` correctly switches the default to NE Default for that deployment
+- [ ] `name_overrides` config in superset_config can add a deployment-specific rename without touching the YAML files
+- [ ] `region_excludes` global config drops features from all charts
+
+### Performance + ops
+
+- [ ] Build script is reproducible: same NE SHA + same configs → identical outputs (byte-for-byte)
+- [ ] Build script runs in CI and produces the expected files on a clean checkout
+- [ ] Plugin lazy-loads correctly (chart-type registry doesn't pull D3 unless this chart type is actually used)
+- [ ] No regression in legacy chart load times during the deprecation overlap
+
 ## References
 
 - Natural Earth worldviews: https://www.naturalearthdata.com/blog/admin-0-disputed-areas/
