@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useCallback, useEffect, useRef } from 'react';
+import { ErrorInfo, useCallback, useEffect, useRef } from 'react';
 import { t } from '@apache-superset/core/translation';
 import { logging } from '@apache-superset/core/utils';
 import {
@@ -253,12 +253,12 @@ function Chart({
   ]);
 
   const handleRenderContainerFailure = useCallback(
-    (error: Error, info: { componentStack: string } | null) => {
+    (error: Error, info: ErrorInfo) => {
       logging.warn(error);
       actions.chartRenderingFailed(
         error.toString(),
         chartId,
-        info ? info.componentStack : null,
+        info?.componentStack ?? null,
       );
 
       actions.logEvent(LOG_ACTIONS_RENDER_CHART, {
@@ -421,7 +421,9 @@ function Chart({
     ],
   );
 
-  const databaseName = datasource?.database?.name as string | undefined;
+  const databaseName =
+    datasource?.parent?.name ??
+    (datasource?.database?.name as string | undefined);
 
   const isLoading = chartStatus === 'loading';
   // Suppress spinner during auto-refresh to avoid visual flicker
