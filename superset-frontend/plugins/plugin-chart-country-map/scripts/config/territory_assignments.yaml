@@ -66,15 +66,15 @@ countries:
 
   # -------------------------------------------------------------------
   # Finland — add Åland
-  # NE has Åland as a separate Admin 0 record (ALA) and it is missing
-  # from the FIN admin1 dataset. Re-attach it as FI-01 with the Finnish
-  # name "Ahvenanmaan maakunta".
+  # NE has Åland as a separate Admin 0 record (note: NE uses ALD, not
+  # the ISO 3166-1 ALA) and it is missing from the FIN admin1 dataset.
+  # Re-attach it as FI-01 with the Finnish name "Ahvenanmaan maakunta".
   # -------------------------------------------------------------------
   FIN:
     additions:
       - description: Add Åland as Finland subdivision FI-01
         from:
-          adm0_a3: ALA
+          adm0_a3: ALD       # NE-specific code; ISO equivalent is ALA
           match: { name_en: Åland }
         set:
           iso_3166_2: FI-01
