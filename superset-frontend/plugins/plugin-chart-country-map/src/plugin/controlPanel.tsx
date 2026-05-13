@@ -278,6 +278,14 @@ const isAdminCountry = (controls: Record<string, { value?: unknown }>) =>
   controls.admin_level?.value === 0;
 const isAdminAggregated = (controls: Record<string, { value?: unknown }>) =>
   controls.admin_level?.value === 'aggregated';
+const hasComposite = (controls: Record<string, { value?: unknown }>) =>
+  Boolean(controls.composite?.value);
+
+// A country selection is only *required* when the user is rendering
+// subdivisions or an aggregated layer AND has not picked a composite.
+// At Admin 0 (world choropleth) or with a composite set, country is moot.
+const needsCountry = (controls: Record<string, { value?: unknown }>) =>
+  !isAdminCountry(controls) && !hasComposite(controls);
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
@@ -331,9 +339,15 @@ const config: ControlPanelConfig = {
               default: null,
               renderTrigger: true,
               clearable: false,
-              validators: [validateNonEmpty],
-              visibility: ({ controls }: any) =>
-                !isAdminCountry(controls) && !controls.composite?.value,
+              // Country is only required when the current admin_level /
+              // composite combination actually consumes it. Without this,
+              // a hidden empty country traps the user with a permanent
+              // "Country: cannot be empty" badge on the Data tab even
+              // though there's no Country control on that tab.
+              mapStateToProps: ({ controls }: any) => ({
+                validators: needsCountry(controls) ? [validateNonEmpty] : [],
+              }),
+              visibility: ({ controls }: any) => needsCountry(controls),
             },
           },
         ],
@@ -347,13 +361,18 @@ const config: ControlPanelConfig = {
                 'Which administrative region layer to dissolve into. ' +
                   'Available sets depend on the selected country.',
               ),
-              choices: ({ controls }: any) =>
-                REGION_SET_CHOICES_BY_COUNTRY[
-                  String(controls.country?.value || '')
-                ] || [],
               default: null,
               renderTrigger: true,
               clearable: true,
+              // SelectControl's `choices` must be a literal array, not a
+              // function. Use mapStateToProps to derive choices from the
+              // currently selected country at render time.
+              mapStateToProps: ({ controls }: any) => ({
+                choices:
+                  REGION_SET_CHOICES_BY_COUNTRY[
+                    String(controls.country?.value || '')
+                  ] || [],
+              }),
               visibility: ({ controls }: any) => isAdminAggregated(controls),
             },
           },
@@ -366,12 +385,19 @@ const config: ControlPanelConfig = {
               label: t('Composite map'),
               description: t(
                 'Multi-country composite (e.g. France with overseas territories). ' +
-                  'When set, overrides admin level + country.',
+                  'Only relevant at subdivision/aggregated views; overrides ' +
+                  'admin level + country when set.',
               ),
               choices: COMPOSITE_CHOICES,
               default: null,
               renderTrigger: true,
               clearable: true,
+              // Hide when nothing is composite-shaped — at Admin 0 (world
+              // map) it would override the world choropleth, and if the
+              // build pipeline didn't emit any composites there's nothing
+              // to pick. Also leaves room for future per-country scoping.
+              visibility: ({ controls }: any) =>
+                COMPOSITE_CHOICES.length > 0 && !isAdminCountry(controls),
             },
           },
         ],
@@ -411,23 +437,13 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          {
-            name: 'show_flying_islands',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Show flying islands'),
-              description: t(
-                'When on, far-flung territories (e.g. US Hawaii/Alaska) are ' +
-                  'shown — usually repositioned into insets near the mainland. ' +
-                  'When off, they are dropped entirely and the viewport tightens ' +
-                  'to the remaining mainland.',
-              ),
-              default: true,
-              renderTrigger: true,
-            },
-          },
-        ],
+        // `show_flying_islands` is intentionally absent from this control
+        // set: the build pipeline already repositions known flying-islands
+        // groups (Hawaii, Alaska, French overseas territories, ...) at
+        // build time per `flying_islands.yaml`, and the runtime drop
+        // toggle requires per-feature `_flying: true` tags which the
+        // build doesn't currently emit. Bringing the control back is a
+        // single-line follow-up once that tagging lands — see the SIP.
         [
           {
             name: 'name_language',

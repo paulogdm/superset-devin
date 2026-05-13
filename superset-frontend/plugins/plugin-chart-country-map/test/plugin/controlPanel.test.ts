@@ -56,7 +56,9 @@ const findControl = (name: string) => {
 
 test('all required new controls are present', () => {
   const names = allControlNames();
-  // The full set of controls the redesign introduced
+  // The full set of controls the redesign introduced. `show_flying_islands`
+  // is intentionally absent — it's a no-op until the build pipeline tags
+  // features as flying, and showing a dead toggle was misleading.
   for (const required of [
     'worldview',
     'admin_level',
@@ -65,23 +67,21 @@ test('all required new controls are present', () => {
     'composite',
     'region_includes',
     'region_excludes',
-    'show_flying_islands',
     'name_language',
   ]) {
     expect(names).toContain(required);
   }
 });
 
+test('show_flying_islands is intentionally absent (no-op until features are tagged)', () => {
+  const names = allControlNames();
+  expect(names).not.toContain('show_flying_islands');
+});
+
 test('worldview defaults to ukr (Superset editorial choice)', () => {
   const c = findControl('worldview');
   expect(c).not.toBeNull();
   expect(c.default).toBe('ukr');
-});
-
-test('show_flying_islands defaults to true', () => {
-  const c = findControl('show_flying_islands');
-  expect(c).not.toBeNull();
-  expect(c.default).toBe(true);
 });
 
 test('name_language defaults to en', () => {
@@ -136,6 +136,39 @@ test('country selector visibility hides on Admin 0', () => {
   ).toBe(false);
 });
 
+test('country validator only fires when country is actually needed', () => {
+  const c = findControl('country');
+  // Admin 0 → no validator (the Data tab would otherwise show a
+  // permanent "Country: cannot be empty" badge for a hidden control).
+  expect(
+    c.mapStateToProps({ controls: { admin_level: { value: '0' } } }).validators,
+  ).toEqual([]);
+  // Composite set → no validator
+  expect(
+    c.mapStateToProps({
+      controls: {
+        admin_level: { value: '1' },
+        composite: { value: 'france_overseas' },
+      },
+    }).validators,
+  ).toEqual([]);
+  // Admin 1, no composite → validator present (single non-empty validator)
+  expect(
+    c.mapStateToProps({ controls: { admin_level: { value: '1' } } }).validators
+      .length,
+  ).toBe(1);
+});
+
+test('composite selector hides on Admin 0', () => {
+  const c = findControl('composite');
+  expect(c.visibility({ controls: { admin_level: { value: '0' } } })).toBe(
+    false,
+  );
+  expect(c.visibility({ controls: { admin_level: { value: '1' } } })).toBe(
+    true,
+  );
+});
+
 test('region_set selector only visible when admin_level === aggregated', () => {
   const c = findControl('region_set');
   expect(c).not.toBeNull();
@@ -150,18 +183,27 @@ test('region_set selector only visible when admin_level === aggregated', () => {
   );
 });
 
-test('region_set choices key off the selected country', () => {
+test('region_set choices key off the selected country (via mapStateToProps)', () => {
   const c = findControl('region_set');
-  const turChoices = c.choices({ controls: { country: { value: 'TUR' } } });
+  // SelectControl expects `choices` to be a literal array, so we feed
+  // them through mapStateToProps which receives the current control
+  // state on every render.
+  const turChoices = c.mapStateToProps({
+    controls: { country: { value: 'TUR' } },
+  }).choices;
   expect(turChoices.length).toBeGreaterThanOrEqual(1);
   expect(turChoices[0][0]).toBe('nuts_1');
 
-  const fraChoices = c.choices({ controls: { country: { value: 'FRA' } } });
+  const fraChoices = c.mapStateToProps({
+    controls: { country: { value: 'FRA' } },
+  }).choices;
   expect(fraChoices.length).toBeGreaterThanOrEqual(1);
   expect(fraChoices[0][0]).toBe('regions');
 
   // Country with no aggregated regions defined → empty
-  const usaChoices = c.choices({ controls: { country: { value: 'USA' } } });
+  const usaChoices = c.mapStateToProps({
+    controls: { country: { value: 'USA' } },
+  }).choices;
   expect(usaChoices).toEqual([]);
 });
 
