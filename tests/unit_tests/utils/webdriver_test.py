@@ -684,16 +684,7 @@ class TestWebDriverPlaywrightErrorHandling:
             driver.get_screenshot("http://example.com", "test-element", mock_user)
 
         mock_page.wait_for_function.assert_called_once_with(
-            """() => {
-                            const els = document.querySelectorAll('.loading');
-                            for (const el of els) {
-                                const r = el.getBoundingClientRect();
-                                if (r.top < window.innerHeight && r.bottom > 0) {
-                                    return false;
-                                }
-                            }
-                            return true;
-                        }""",
+            "() => document.querySelectorAll('.loading').length === 0",
             timeout=60 * 1000,
         )
         # Guard against reintroducing the old snapshot-based approach
