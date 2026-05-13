@@ -141,6 +141,14 @@ COUNTRY_MAP = {
 
 Static config only — no env var. This is a cartographic editorial decision, not a per-request flag.
 
+### Hosting / asset path
+
+Build outputs ship into Superset's Flask static directory at `superset/static/assets/country-maps/`, served at `/static/assets/country-maps/<file>`. No webpack involvement needed — Flask serves them directly.
+
+The build script (`scripts/build.py`) writes there directly. Files are committed to the repo so a fresh ephemeral env can render the chart immediately without running the build first. Trade-off: ~17 MB of generated files in the tree (offset by removing the legacy plugin's ~34 MB of committed GeoJSON, net -17 MB).
+
+Future optimizations if maintenance burden grows: gitignore + postinstall hook, CDN-hosted assets, or server-side lazy generation per request.
+
 ### Deprecation of legacy plugin
 
 Two-phase, modeled on existing deprecated-chart pattern:

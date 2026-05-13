@@ -1,6 +1,6 @@
 # Build cache (downloaded NE shapefiles)
 .cache/
 
-# Build outputs (regenerated; not committed at the script-dir level —
-# the eventual location for shipped GeoJSON is the plugin's src/data/)
+# Stale local output dir from earlier iterations (outputs now ship to
+# superset/static/assets/country-maps/ at the repo root)
 output/

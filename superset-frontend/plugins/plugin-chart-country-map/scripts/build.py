@@ -43,8 +43,17 @@ NE_RAW_URL = f"https://raw.githubusercontent.com/{NE_REPO}/{NE_PINNED_SHA}/10m_c
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_DIR = SCRIPT_DIR / "config"
-OUTPUT_DIR = SCRIPT_DIR / "output"
 CACHE_DIR = SCRIPT_DIR / ".cache"
+
+# Outputs ship into Superset's Flask static directory so the chart can
+# fetch them at runtime without webpack involvement. The path that
+# Flask serves them at is `/static/assets/country-maps/<file>`.
+#
+# The repo path is computed relative to this script; supports running
+# from anywhere in the source tree.
+# parents[0]=plugin-chart-country-map, [1]=plugins, [2]=superset-frontend, [3]=repo root
+REPO_ROOT = SCRIPT_DIR.parents[3]
+OUTPUT_DIR = REPO_ROOT / "superset" / "static" / "assets" / "country-maps"
 
 SHAPEFILE_EXTS = ["shp", "shx", "dbf", "prj", "cpg"]
 
@@ -871,7 +880,7 @@ def write_manifest(targets: list[tuple[str, int]]) -> Path:
 
 
 def main() -> int:
-    OUTPUT_DIR.mkdir(exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     log(f"Country Map build — pinned to NE {NE_PINNED_TAG} ({NE_PINNED_SHA[:8]})")
 
