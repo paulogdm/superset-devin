@@ -38,7 +38,7 @@ const sendBeacon = events => {
   let endpoint = LOG_ENDPOINT;
   const { source, source_id } = events[0];
   // backend logs treat these request params as first-class citizens
-  if (source === 'dashboard') {
+  if (source === 'dashboard' || source === 'embedded_dashboard') {
     endpoint += `&dashboard_id=${source_id}`;
   } else if (source === 'slice') {
     endpoint += `&slice_id=${source_id}`;
@@ -91,9 +91,10 @@ const loggerMiddleware = store => next => {
     }
     const path = navPath || window?.location?.href;
 
-    if (dashboardInfo?.id && path?.includes('/dashboard/')) {
+    const isEmbedded = path?.includes('/embedded/');
+    if (dashboardInfo?.id && (path?.includes('/dashboard/') || isEmbedded)) {
       logMetadata = {
-        source: 'dashboard',
+        source: isEmbedded ? 'embedded_dashboard' : 'dashboard',
         source_id: dashboardInfo.id,
         dashboard_id: dashboardInfo.id,
         ...logMetadata,
