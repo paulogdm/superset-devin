@@ -58,8 +58,9 @@ import { Dataset } from '../types';
 import TableControls from './DrillDetailTableControls';
 import { getDrillPayload } from './utils';
 import { ResultsPage } from './types';
+import { datasetLabelLower } from 'src/features/semanticLayers/label';
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 interface DataType {
   [key: string]: any;
@@ -93,6 +94,7 @@ export default function DrillDetailPane({
 }) {
   const theme = useTheme();
   const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const lastPageIndex = useRef(pageIndex);
   const [filters, setFilters] = useState(initialFilters);
   const [isLoading, setIsLoading] = useState(false);
@@ -306,13 +308,13 @@ export default function DrillDetailPane({
     if (!responseError && !isLoading && !resultsPages.has(pageIndex)) {
       setIsLoading(true);
       const jsonPayload = getDrillPayload(formData, filters) ?? {};
-      const cachePageLimit = Math.ceil(SAMPLES_ROW_LIMIT / PAGE_SIZE);
+      const cachePageLimit = Math.ceil(SAMPLES_ROW_LIMIT / pageSize);
       getDatasourceSamples(
         datasourceType as DatasourceType,
         Number(datasourceId),
         false,
         jsonPayload,
-        PAGE_SIZE,
+        pageSize,
         pageIndex + 1,
         dashboardId,
       )
@@ -348,6 +350,7 @@ export default function DrillDetailPane({
     formData,
     isLoading,
     pageIndex,
+    pageSize,
     responseError,
     resultsPages,
   ]);
@@ -373,7 +376,7 @@ export default function DrillDetailPane({
     tableContent = <Loading />;
   } else if (resultsPage?.total === 0) {
     // Render empty state if no results are returned for page
-    const title = t('No rows were returned for this dataset');
+    const title = t('No rows were returned for this %s', datasetLabelLower());
     tableContent = <EmptyState image="document.svg" title={title} />;
   } else {
     // Render table if at least one page has successfully loaded
@@ -383,13 +386,20 @@ export default function DrillDetailPane({
           data={data}
           columns={mappedColumns}
           size={TableSize.Small}
-          defaultPageSize={PAGE_SIZE}
+          defaultPageSize={DEFAULT_PAGE_SIZE}
           recordCount={resultsPage?.total}
           usePagination
           loading={isLoading}
-          onChange={pagination =>
-            setPageIndex(pagination.current ? pagination.current - 1 : 0)
-          }
+          onChange={pagination => {
+            const newPageSize = pagination.pageSize ?? pageSize;
+            if (newPageSize !== pageSize) {
+              setPageSize(newPageSize);
+              setResultsPages(new Map());
+              setPageIndex(0);
+            } else {
+              setPageIndex(pagination.current ? pagination.current - 1 : 0);
+            }
+          }}
           resizable
           virtualize
           allowHTML={allowHTML}
