@@ -23,9 +23,14 @@ under the License.
   </head>
   <body>
     <script>
-      const channel = new BroadcastChannel('oauth');
-      channel.postMessage({ tabId: '{{ tab_id }}' });
-      channel.close();
+      const message = { tabId: '{{ tab_id }}' };
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('oauth');
+        channel.postMessage(message);
+        channel.close();
+      }
+      localStorage.setItem('oauth2_auth_complete', JSON.stringify(message));
+      localStorage.removeItem('oauth2_auth_complete');
       window.close();
     </script>
     <p>You can close this window and re-run the query.</p>

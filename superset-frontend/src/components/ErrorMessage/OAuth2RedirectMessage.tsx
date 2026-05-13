@@ -31,6 +31,9 @@ import { QueryResponse } from '@superset-ui/core';
 import type { ErrorMessageComponentProps } from './types';
 import { ErrorAlert } from './ErrorAlert';
 
+const OAUTH_CHANNEL_NAME = 'oauth';
+const OAUTH_STORAGE_EVENT_KEY = 'oauth2_auth_complete';
+
 interface OAuth2RedirectExtra {
   url: string;
   tab_id: string;
@@ -97,9 +100,8 @@ export function OAuth2RedirectMessage({
   const dispatch = useDispatch();
 
   useEffect(() => {
-    const channel = new BroadcastChannel('oauth');
-    channel.onmessage = event => {
-      if (event.data.tabId !== extra.tab_id) {
+    const handleOAuthComplete = (tabId?: string) => {
+      if (tabId !== extra.tab_id) {
         return;
       }
       if (source === 'sqllab' && query) {
@@ -111,8 +113,35 @@ export function OAuth2RedirectMessage({
       }
     };
 
+    const channel =
+      typeof BroadcastChannel !== 'undefined'
+        ? new BroadcastChannel(OAUTH_CHANNEL_NAME)
+        : null;
+
+    if (channel) {
+      channel.onmessage = event => {
+        handleOAuthComplete(event.data?.tabId);
+      };
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== OAUTH_STORAGE_EVENT_KEY || !event.newValue) {
+        return;
+      }
+
+      try {
+        const message = JSON.parse(event.newValue) as { tabId?: string };
+        handleOAuthComplete(message.tabId);
+      } catch {
+        // ignore malformed storage payloads
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+
     return () => {
-      channel.close();
+      window.removeEventListener('storage', handleStorage);
+      channel?.close();
     };
   }, [source, extra.tab_id, dispatch, query, chartId, chartList, dashboardId]);
 

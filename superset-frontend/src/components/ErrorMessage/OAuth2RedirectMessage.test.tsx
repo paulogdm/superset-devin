@@ -78,6 +78,15 @@ function simulateBroadcastMessage(data: any) {
   capturedChannel.onmessage?.({ data });
 }
 
+function simulateStorageMessage(data: any) {
+  window.dispatchEvent(
+    new StorageEvent('storage', {
+      key: 'oauth2_auth_complete',
+      newValue: JSON.stringify(data),
+    }),
+  );
+}
+
 const defaultProps = {
   error: {
     error_type: ErrorTypeEnum.OAUTH2_REDIRECT,
@@ -127,6 +136,16 @@ describe('OAuth2RedirectMessage Component', () => {
     render(setup());
 
     simulateBroadcastMessage({ tabId: 'tabId' });
+
+    await waitFor(() => {
+      expect(reRunQuery).toHaveBeenCalledWith({ sql: 'SELECT * FROM table' });
+    });
+  });
+
+  test('dispatches reRunQuery action when storage event has matching tab ID', async () => {
+    render(setup());
+
+    simulateStorageMessage({ tabId: 'tabId' });
 
     await waitFor(() => {
       expect(reRunQuery).toHaveBeenCalledWith({ sql: 'SELECT * FROM table' });
