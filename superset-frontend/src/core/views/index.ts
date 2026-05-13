@@ -39,6 +39,24 @@ const viewRegistry: Map<
 
 const locationIndex: Map<string, Set<string>> = new Map();
 
+// Subscribers notified when views at a specific location change
+const locationListeners: Map<string, Set<() => void>> = new Map();
+
+/**
+ * Subscribe to view registrations at a given location.
+ * Returns an unsubscribe function. Useful for components that need to
+ * re-render when an extension registers a view after async load.
+ */
+export const onViewsChange = (
+  location: string,
+  cb: () => void,
+): (() => void) => {
+  const listeners = locationListeners.get(location) ?? new Set();
+  listeners.add(cb);
+  locationListeners.set(location, listeners);
+  return () => listeners.delete(cb);
+};
+
 const registerView: typeof viewsApi.registerView = (
   view: View,
   location: string,
@@ -52,9 +70,13 @@ const registerView: typeof viewsApi.registerView = (
   ids.add(id);
   locationIndex.set(location, ids);
 
+  // Notify any React components waiting on this location
+  locationListeners.get(location)?.forEach(cb => cb());
+
   return new Disposable(() => {
     viewRegistry.delete(id);
     locationIndex.get(location)?.delete(id);
+    locationListeners.get(location)?.forEach(cb => cb());
   });
 };
 
