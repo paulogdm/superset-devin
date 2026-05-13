@@ -42,7 +42,9 @@ export default function transformProps(
   chartProps: CountryMapChartProps,
 ): CountryMapTransformedProps {
   const { queriesData, width, height } = chartProps;
-  const formData = chartProps.formData as CountryMapFormData;
+  // ChartProps.formData is camelCase-normalized; use rawFormData to keep
+  // the snake_case keys defined in CountryMapFormData / the control panel.
+  const formData = chartProps.rawFormData as CountryMapFormData;
   const data = (queriesData?.[0]?.data as Record<string, unknown>[]) ?? [];
 
   const worldview = formData.worldview || 'ukr';

@@ -31,6 +31,8 @@ import { geoMercator, geoPath } from 'd3-geo';
 import {
   getNumberFormatter,
   getSequentialSchemeRegistry,
+  t,
+  useTheme,
 } from '@superset-ui/core';
 import { CountryMapTransformedProps } from './types';
 
@@ -53,19 +55,6 @@ interface TooltipState {
 const containerStyle: CSSProperties = {
   position: 'relative',
   fontFamily: 'sans-serif',
-};
-
-const tooltipStyle: CSSProperties = {
-  position: 'absolute',
-  pointerEvents: 'none',
-  background: 'rgba(0, 0, 0, 0.8)',
-  color: '#fff',
-  padding: '4px 8px',
-  borderRadius: 4,
-  fontSize: 12,
-  whiteSpace: 'nowrap',
-  transform: 'translate(-50%, -120%)',
-  zIndex: 10,
 };
 
 /**
@@ -121,6 +110,31 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
     numberFormat,
     linearColorScheme,
   } = props;
+
+  const theme = useTheme();
+  const colors = {
+    fillFallback: theme.colors.grayscale.light4,
+    schemeFallback: theme.colors.grayscale.light2,
+    hoverFallback: theme.colors.grayscale.light1,
+    stroke: theme.colors.grayscale.light5,
+    tooltipBg: theme.colors.grayscale.dark2,
+    tooltipFg: theme.colors.grayscale.light5,
+    errorFg: theme.colors.error.base,
+    loadingFg: theme.colors.grayscale.base,
+  };
+  const tooltipStyle: CSSProperties = {
+    position: 'absolute',
+    pointerEvents: 'none',
+    background: colors.tooltipBg,
+    color: colors.tooltipFg,
+    padding: '4px 8px',
+    borderRadius: 4,
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+    transform: 'translate(-50%, -120%)',
+    zIndex: 10,
+    opacity: 0.9,
+  };
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -182,14 +196,16 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
     const scheme = linearColorScheme
       ? getSequentialSchemeRegistry().get(linearColorScheme)
       : null;
-    const linear = scheme ? scheme.createLinearScale([lo, hi]) : () => '#ccc';
+    const linear = scheme
+      ? scheme.createLinearScale([lo, hi])
+      : () => colors.schemeFallback;
 
     const out: Record<string, string> = {};
     numericData.forEach(d => {
-      out[d.key] = linear(d.value) ?? '#ccc';
+      out[d.key] = linear(d.value) ?? colors.schemeFallback;
     });
     return out;
-  }, [data, metricName, linearColorScheme]);
+  }, [data, metricName, linearColorScheme, colors.schemeFallback]);
 
   const formatter = useMemo(
     () =>
@@ -256,24 +272,23 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
       const d = path(feature);
       if (!d) return;
       const key = featureKey(feature);
-      const fill = colorByKey[key] || '#eee';
+      const fill = colorByKey[key] || colors.fillFallback;
       const el = document.createElementNS(ns, 'path');
       el.setAttribute('d', d);
       el.setAttribute('fill', fill);
-      el.setAttribute('stroke', '#fff');
+      el.setAttribute('stroke', colors.stroke);
       el.setAttribute('stroke-width', '0.5');
       el.setAttribute('vector-effect', 'non-scaling-stroke');
       el.style.cursor = 'pointer';
       el.style.transition = 'fill 120ms';
 
       el.addEventListener('mouseenter', () => {
-        // Darken hover color
         const c = colorByKey[key];
-        const darker = c ? rgb(c).darker(0.5).toString() : '#bbb';
+        const darker = c ? rgb(c).darker(0.5).toString() : colors.hoverFallback;
         el.setAttribute('fill', darker);
       });
       el.addEventListener('mouseleave', () => {
-        el.setAttribute('fill', colorByKey[key] || '#eee');
+        el.setAttribute('fill', colorByKey[key] || colors.fillFallback);
         setTooltip(null);
       });
       el.addEventListener('click', (event: globalThis.MouseEvent) => {
@@ -318,9 +333,15 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
   if (error) {
     return (
       <div
-        style={{ ...containerStyle, width, height, padding: 16, color: '#c00' }}
+        style={{
+          ...containerStyle,
+          width,
+          height,
+          padding: 16,
+          color: colors.errorFg,
+        }}
       >
-        Error loading map: {error}
+        {t('Error loading map:')} {error}
       </div>
     );
   }
@@ -353,10 +374,10 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
             top: 8,
             left: 8,
             fontSize: 11,
-            color: '#888',
+            color: colors.loadingFg,
           }}
         >
-          Loading map…
+          {t('Loading map…')}
         </div>
       )}
     </div>

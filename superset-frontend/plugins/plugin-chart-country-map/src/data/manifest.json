@@ -1,13 +1,8 @@
 {
   "ne_pinned_tag": "v5.1.2",
   "ne_pinned_sha": "f1890d9f152c896d250a77557a5751a93d494776",
-  "worldviews": [
-    "ukr"
-  ],
-  "admin_levels": [
-    0,
-    1
-  ],
+  "worldviews": ["ukr"],
+  "admin_levels": [0, 1],
   "countries_by_worldview": {
     "ukr": [
       "AFG",

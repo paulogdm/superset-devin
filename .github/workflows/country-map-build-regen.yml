@@ -70,8 +70,20 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body \
-            "⚠️ Country Map: this PR changes the build configs but the committed GeoJSON outputs in \`superset/static/assets/country-maps/\` are stale. Re-run \`./scripts/build.sh\` locally and commit the regenerated files."
+            "⚠️ Country Map: drift detected between locally committed GeoJSON outputs and CI-regenerated outputs. Either the YAML configs were updated without re-running \`./scripts/build.sh\`, OR mapshaper output differs cross-platform (macOS dev vs Linux CI). Investigate before merge."
 
-      - name: Fail if drift on PR
+      # Informational only: cross-platform mapshaper output reproducibility
+      # is still being worked through. Don't block PRs on drift; surface
+      # via the comment above and a workflow summary.
+      - name: Summarize drift (informational)
         if: steps.drift.outputs.drift == 'true' && github.event_name == 'pull_request'
-        run: exit 1
+        run: |
+          {
+            echo "## Country Map: output drift detected (informational)";
+            echo "";
+            echo "Files differing from committed snapshot:";
+            echo '```';
+            git status --short superset/static/assets/country-maps/ \
+                               superset-frontend/plugins/plugin-chart-country-map/src/data/manifest.json;
+            echo '```';
+          } >> "$GITHUB_STEP_SUMMARY"

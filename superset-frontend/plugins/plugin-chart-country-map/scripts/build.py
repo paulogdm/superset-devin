@@ -47,7 +47,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 # ----------------------------------------------------------------------
 # Constants / paths
@@ -83,8 +83,8 @@ SHAPEFILE_EXTS = ["shp", "shx", "dbf", "prj", "cpg"]
 # string = the "Default" (ungrouped) NE editorial. The new plugin's
 # documented default is "ukr".
 WORLDVIEWS_ADMIN_0 = [
-    "",       # Default
-    "ukr",    # Ukraine — Superset's documented default
+    "",  # Default
+    "ukr",  # Ukraine — Superset's documented default
 ]
 
 
@@ -152,7 +152,15 @@ def shp_to_geojson(shp: Path, output: Path) -> None:
         )
     log(f"  mapshaper: {shp.name} → {output.name}")
     subprocess.run(
-        ["npx", "--yes", "mapshaper@" + MAPSHAPER_VERSION, str(shp), "-o", str(output), "format=geojson"],
+        [
+            "npx",
+            "--yes",
+            "mapshaper@" + MAPSHAPER_VERSION,
+            str(shp),
+            "-o",
+            str(output),
+            "format=geojson",
+        ],
         check=True,
         stderr=subprocess.DEVNULL,
     )
@@ -178,10 +186,16 @@ def simplify_geojson(src: Path, dst: Path, percentage: float = 5.0) -> None:
     log(f"  mapshaper -simplify {percentage}% keep-shapes: {src.name} → {dst.name}")
     subprocess.run(
         [
-            "npx", "--yes", "mapshaper@" + MAPSHAPER_VERSION,
+            "npx",
+            "--yes",
+            "mapshaper@" + MAPSHAPER_VERSION,
             str(src),
-            "-simplify", f"{percentage}%", "keep-shapes",
-            "-o", str(dst), "format=geojson",
+            "-simplify",
+            f"{percentage}%",
+            "keep-shapes",
+            "-o",
+            str(dst),
+            "format=geojson",
         ],
         check=True,
         stderr=subprocess.DEVNULL,
@@ -216,7 +230,9 @@ def _matches(props: dict[str, Any], conditions: dict[str, Any]) -> bool:
 # ----------------------------------------------------------------------
 
 
-def apply_name_overrides(geo: dict, overrides: list[dict]) -> dict:
+def apply_name_overrides(
+    geo: dict[str, Any], overrides: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Apply attribute overrides from name_overrides.yaml."""
     n_applied = 0
     for entry in overrides:
@@ -227,13 +243,16 @@ def apply_name_overrides(geo: dict, overrides: list[dict]) -> dict:
             if _matches(props, match):
                 props.update(new_values)
                 n_applied += 1
-    log(f"  name_overrides: applied {n_applied} field updates "
-        f"across {len(overrides)} entries")
+    log(
+        f"  name_overrides: applied {n_applied} field updates "
+        f"across {len(overrides)} entries"
+    )
     return geo
 
 
-def _collect_coords(geom: dict, xs: list[float], ys: list[float]) -> None:
+def _collect_coords(geom: dict[str, Any], xs: list[float], ys: list[float]) -> None:
     """Walk a Polygon/MultiPolygon and collect all x/y values."""
+
     def walk(c: Any) -> None:
         if isinstance(c[0], (int, float)):
             xs.append(c[0])
@@ -241,10 +260,11 @@ def _collect_coords(geom: dict, xs: list[float], ys: list[float]) -> None:
         else:
             for sub in c:
                 walk(sub)
+
     walk(geom["coordinates"])
 
 
-def _bbox_center(geom: dict) -> tuple[float, float]:
+def _bbox_center(geom: dict[str, Any]) -> tuple[float, float]:
     xs: list[float] = []
     ys: list[float] = []
     _collect_coords(geom, xs, ys)
@@ -252,11 +272,11 @@ def _bbox_center(geom: dict) -> tuple[float, float]:
 
 
 def _translate_and_scale_with_pivot(
-    geom: dict,
+    geom: dict[str, Any],
     offset: list[float],
     scale: float,
     pivot: tuple[float, float],
-) -> dict:
+) -> dict[str, Any]:
     """Translate + scale a geometry around an explicit pivot point.
 
     Pure-Python — no shapely. Operates on Polygon/MultiPolygon coords
@@ -278,15 +298,15 @@ def _translate_and_scale_with_pivot(
 
 
 def _translate_and_scale(
-    geom: dict,
+    geom: dict[str, Any],
     offset: list[float],
     scale: float = 1.0,
-) -> dict:
+) -> dict[str, Any]:
     """Translate + scale around the geometry's own bbox center."""
     return _translate_and_scale_with_pivot(geom, offset, scale, _bbox_center(geom))
 
 
-def _drop_parts(geom: dict, indices: list[int]) -> dict:
+def _drop_parts(geom: dict[str, Any], indices: list[int]) -> dict[str, Any]:
     """Drop specific sub-polygon indices from a MultiPolygon (no-op for Polygon)."""
     if geom["type"] != "MultiPolygon":
         return geom
@@ -295,7 +315,7 @@ def _drop_parts(geom: dict, indices: list[int]) -> dict:
     return {"type": "MultiPolygon", "coordinates": kept}
 
 
-def _bbox_contains(geom: dict, nw: list[float], se: list[float]) -> bool:
+def _bbox_contains(geom: dict[str, Any], nw: list[float], se: list[float]) -> bool:
     """Whether the geometry's bbox is fully contained within the [nw, se] box."""
     xs: list[float] = []
     ys: list[float] = []
@@ -314,17 +334,12 @@ def _bbox_contains(geom: dict, nw: list[float], se: list[float]) -> bool:
     x_min, x_max = min(xs), max(xs)
     y_min, y_max = min(ys), max(ys)
     # nw = (lon_west, lat_north); se = (lon_east, lat_south)
-    return (
-        x_min >= nw[0]
-        and x_max <= se[0]
-        and y_min >= se[1]
-        and y_max <= nw[1]
-    )
+    return x_min >= nw[0] and x_max <= se[0] and y_min >= se[1] and y_max <= nw[1]
 
 
 def apply_composite_maps(
-    base_admin1: dict,
-    config: dict,
+    base_admin1: dict[str, Any],
+    config: dict[str, Any],
     worldview: str,
     simplify_pct: float = 5.0,
 ) -> list[Path]:
@@ -355,7 +370,7 @@ def apply_composite_maps(
         base_a3 = cdef["base"]["adm0_a3"]
 
         # Start with base country's Admin 1 features (deep copy)
-        composite_features: list[dict] = [
+        composite_features: list[dict[str, Any]] = [
             json.loads(json.dumps(f))
             for f in base_admin1["features"]
             if f["properties"].get("adm0_a3") == base_a3
@@ -369,9 +384,13 @@ def apply_composite_maps(
             group = entry.get("group", False)
             drop_parts = entry.get("drop_parts")
 
-            matched = [f for f in composite_features if _matches(f["properties"], match)]
+            matched = [
+                f for f in composite_features if _matches(f["properties"], match)
+            ]
             if not matched:
-                log(f"    WARN: composite {composite_id} base_reposition matched 0 features for {match}")
+                log(
+                    f"    WARN: composite {composite_id} base_reposition matched 0 features for {match}"
+                )
                 continue
 
             if group and len(matched) > 1:
@@ -426,19 +445,35 @@ def apply_composite_maps(
 
             # If dissolve=true and multiple matched, merge via mapshaper
             if dissolve and len(matched_source) > 1:
-                inter = OUTPUT_DIR / f"_composite_pre_dissolve_{composite_id}_{source_a3}.geo.json"
-                inter.write_text(json.dumps({
-                    "type": "FeatureCollection",
-                    "features": matched_source,
-                }))
-                dissolved_path = OUTPUT_DIR / f"_composite_dissolved_{composite_id}_{source_a3}.geo.json"
+                inter = (
+                    OUTPUT_DIR
+                    / f"_composite_pre_dissolve_{composite_id}_{source_a3}.geo.json"
+                )
+                inter.write_text(
+                    json.dumps(
+                        {
+                            "type": "FeatureCollection",
+                            "features": matched_source,
+                        }
+                    )
+                )
+                dissolved_path = (
+                    OUTPUT_DIR
+                    / f"_composite_dissolved_{composite_id}_{source_a3}.geo.json"
+                )
                 subprocess.run(
                     [
-                        "npx", "--yes", "mapshaper@" + MAPSHAPER_VERSION,
+                        "npx",
+                        "--yes",
+                        "mapshaper@" + MAPSHAPER_VERSION,
                         str(inter),
-                        "-each", "this.properties._x = 1",
-                        "-dissolve", "_x",
-                        "-o", str(dissolved_path), "format=geojson",
+                        "-each",
+                        "this.properties._x = 1",
+                        "-dissolve",
+                        "_x",
+                        "-o",
+                        str(dissolved_path),
+                        "format=geojson",
                     ],
                     check=True,
                     stderr=subprocess.DEVNULL,
@@ -446,11 +481,13 @@ def apply_composite_maps(
                 dissolved = json.loads(dissolved_path.read_text())
                 inter.unlink()
                 dissolved_path.unlink()
-                added = [{
-                    "type": "Feature",
-                    "geometry": dissolved["features"][0]["geometry"],
-                    "properties": {},
-                }]
+                added = [
+                    {
+                        "type": "Feature",
+                        "geometry": dissolved["features"][0]["geometry"],
+                        "properties": {},
+                    }
+                ]
             else:
                 added = matched_source[:1]
 
@@ -468,16 +505,24 @@ def apply_composite_maps(
             "type": "FeatureCollection",
             "features": composite_features,
         }
-        inter = OUTPUT_DIR / f"_composite_pre_simplify_{composite_id}_{wv_label}.geo.json"
+        inter = (
+            OUTPUT_DIR / f"_composite_pre_simplify_{composite_id}_{wv_label}.geo.json"
+        )
         inter.write_text(json.dumps(composite_geo))
 
         output = OUTPUT_DIR / f"composite_{composite_id}_{wv_label}.geo.json"
         subprocess.run(
             [
-                "npx", "--yes", "mapshaper@" + MAPSHAPER_VERSION,
+                "npx",
+                "--yes",
+                "mapshaper@" + MAPSHAPER_VERSION,
                 str(inter),
-                "-simplify", f"{simplify_pct}%", "keep-shapes",
-                "-o", str(output), "format=geojson",
+                "-simplify",
+                f"{simplify_pct}%",
+                "keep-shapes",
+                "-o",
+                str(output),
+                "format=geojson",
             ],
             check=True,
             stderr=subprocess.DEVNULL,
@@ -494,8 +539,8 @@ def apply_composite_maps(
 
 
 def apply_regional_aggregations(
-    geo: dict,
-    config: dict,
+    geo: dict[str, Any],
+    config: dict[str, Any],
     worldview: str,
     simplify_pct: float = 5.0,
 ) -> list[Path]:
@@ -523,11 +568,12 @@ def apply_regional_aggregations(
     for country_a3, rules in countries.items():
         for set_name, set_def in rules.get("region_sets", {}).items():
             country_features = [
-                f for f in geo["features"]
+                f
+                for f in geo["features"]
                 if f["properties"].get("adm0_a3") == country_a3
             ]
 
-            tagged: list[dict] = []
+            tagged: list[dict[str, Any]] = []
             if "explicit_mapping" in set_def:
                 em = set_def["explicit_mapping"]
                 # iso_3166_2 → (region_code, region_name)
@@ -557,29 +603,45 @@ def apply_regional_aggregations(
                         nf["properties"]["_region_name"] = str(val)
                         tagged.append(nf)
             else:
-                log(f"    {country_a3}/{set_name}: no explicit_mapping or grouping_field — skipping")
+                log(
+                    f"    {country_a3}/{set_name}: no explicit_mapping or grouping_field — skipping"
+                )
                 continue
 
             if not tagged:
-                log(f"    {country_a3}/{set_name}: no features matched mapping — skipping")
+                log(
+                    f"    {country_a3}/{set_name}: no features matched mapping — skipping"
+                )
                 continue
 
             n_groups = len({f["properties"]["_region_code"] for f in tagged})
 
-            inter = OUTPUT_DIR / f"_pre_dissolve_{country_a3}_{set_name}_{wv_label}.geo.json"
+            inter = (
+                OUTPUT_DIR
+                / f"_pre_dissolve_{country_a3}_{set_name}_{wv_label}.geo.json"
+            )
             inter.write_text(
                 json.dumps({"type": "FeatureCollection", "features": tagged})
             )
 
-            output = OUTPUT_DIR / f"regional_{country_a3}_{set_name}_{wv_label}.geo.json"
+            output = (
+                OUTPUT_DIR / f"regional_{country_a3}_{set_name}_{wv_label}.geo.json"
+            )
             subprocess.run(
                 [
-                    "npx", "--yes", "mapshaper@" + MAPSHAPER_VERSION,
+                    "npx",
+                    "--yes",
+                    "mapshaper@" + MAPSHAPER_VERSION,
                     str(inter),
-                    "-dissolve", "_region_code",
+                    "-dissolve",
+                    "_region_code",
                     "copy-fields=_region_name,adm0_a3",
-                    "-simplify", f"{simplify_pct}%", "keep-shapes",
-                    "-o", str(output), "format=geojson",
+                    "-simplify",
+                    f"{simplify_pct}%",
+                    "keep-shapes",
+                    "-o",
+                    str(output),
+                    "format=geojson",
                 ],
                 check=True,
                 stderr=subprocess.DEVNULL,
@@ -607,10 +669,10 @@ def apply_regional_aggregations(
 
 
 def apply_territory_assignments(
-    geo: dict,
-    config: dict,
-    admin0_geo: dict,
-) -> dict:
+    geo: dict[str, Any],
+    config: dict[str, Any],
+    admin0_geo: dict[str, Any],
+) -> dict[str, Any]:
     """Pull features from sibling Admin 0 records into a destination country.
 
     Operates on Admin 1 outputs only — the use cases (China + SARs,
@@ -648,16 +710,18 @@ def apply_territory_assignments(
                 n_added += 1
                 break  # take first match per addition entry
 
-    log(f"  territory_assignments: added {n_added} features from sibling Admin 0 records")
+    log(
+        f"  territory_assignments: added {n_added} features from sibling Admin 0 records"
+    )
     return geo
 
 
 def apply_flying_islands(
-    geo: dict,
-    config: dict,
+    geo: dict[str, Any],
+    config: dict[str, Any],
     country_a3: str | None,
     admin_level: int,
-) -> dict:
+) -> dict[str, Any]:
     """Apply flying_islands.yaml transforms.
 
     For Admin 0 outputs, `country_a3` is None and we apply each country's
@@ -698,7 +762,7 @@ def apply_flying_islands(
         drop = rules.get("drop_outside_bbox") if admin_level == 1 else None
         if drop:
             nw, se = drop["nw"], drop["se"]
-            kept: list[dict] = []
+            kept: list[dict[str, Any]] = []
             for f in geo["features"]:
                 if f["properties"].get("adm0_a3") != a3:
                     kept.append(f)
@@ -724,11 +788,11 @@ def apply_flying_islands(
 def build_one(
     worldview: str,
     admin_level: int,
-    name_overrides: list[dict],
-    flying_islands: dict,
-    territory_assignments: dict,
-    regional_aggregations: dict,
-    composite_maps: dict,
+    name_overrides: list[dict[str, Any]],
+    flying_islands: dict[str, Any],
+    territory_assignments: dict[str, Any],
+    regional_aggregations: dict[str, Any],
+    composite_maps: dict[str, Any],
 ) -> Path:
     """Build one (worldview, admin_level) GeoJSON. Returns the output path."""
     log(f"\nBuilding worldview={worldview or 'default'} admin_level={admin_level}")
@@ -740,14 +804,18 @@ def build_one(
     log(f"  loaded {len(geo['features'])} features")
 
     geo = apply_name_overrides(geo, name_overrides)
-    geo = apply_flying_islands(geo, flying_islands, country_a3=None, admin_level=admin_level)
+    geo = apply_flying_islands(
+        geo, flying_islands, country_a3=None, admin_level=admin_level
+    )
 
     # territory_assignments only makes sense at Admin 1 — the additions
     # (China+SARs, Finland+Åland) inject Admin-0-sized features as
     # single subdivisions of a destination country.
     if admin_level == 1 and territory_assignments.get("countries"):
         admin0_shp = fetch_ne_shapefile(0, worldview)
-        admin0_path = OUTPUT_DIR / f"_admin0_for_assignments_{worldview or 'default'}.geo.json"
+        admin0_path = (
+            OUTPUT_DIR / f"_admin0_for_assignments_{worldview or 'default'}.geo.json"
+        )
         if not admin0_path.exists():
             shp_to_geojson(admin0_shp, admin0_path)
         admin0_geo = json.loads(admin0_path.read_text())
@@ -785,22 +853,24 @@ def build_one(
     transformed.write_text(json.dumps(geo))
     final = OUTPUT_DIR / f"{wv_label}_admin{admin_level}.geo.json"
     simplify_geojson(transformed, final, percentage=5.0)
-    log(f"  wrote {final.name} ({final.stat().st_size:,} bytes, "
-        f"{len(geo['features'])} features)")
+    log(
+        f"  wrote {final.name} ({final.stat().st_size:,} bytes, "
+        f"{len(geo['features'])} features)"
+    )
     raw.unlink()
     transformed.unlink()
     return final
 
 
 def _write_admin1_per_country(
-    geo: dict,
+    geo: dict[str, Any],
     wv_label: str,
     simplify_pct: float = 5.0,
 ) -> list[Path]:
     """Split global Admin 1 into one GeoJSON per country, each simplified."""
     from collections import defaultdict
 
-    by_country: dict[str, list[dict]] = defaultdict(list)
+    by_country: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for f in geo["features"]:
         a3 = f["properties"].get("adm0_a3")
         if a3:
@@ -817,10 +887,16 @@ def _write_admin1_per_country(
         out = OUTPUT_DIR / f"{wv_label}_admin1_{a3}.geo.json"
         subprocess.run(
             [
-                "npx", "--yes", "mapshaper@" + MAPSHAPER_VERSION,
+                "npx",
+                "--yes",
+                "mapshaper@" + MAPSHAPER_VERSION,
                 str(inter),
-                "-simplify", f"{simplify_pct}%", "keep-shapes",
-                "-o", str(out), "format=geojson",
+                "-simplify",
+                f"{simplify_pct}%",
+                "keep-shapes",
+                "-o",
+                str(out),
+                "format=geojson",
             ],
             check=True,
             stderr=subprocess.DEVNULL,
@@ -847,8 +923,8 @@ def write_manifest(targets: list[tuple[str, int]]) -> Path:
     admin_levels = sorted({al for _, al in targets})
 
     countries_by_wv: dict[str, list[str]] = {wv: [] for wv in worldviews}
-    regional_sets: list[dict] = []
-    composites: list[dict] = []
+    regional_sets: list[dict[str, Any]] = []
+    composites: list[dict[str, Any]] = []
 
     for path in sorted(OUTPUT_DIR.glob("*.geo.json")):
         name = path.stem.replace(".geo", "")
@@ -856,29 +932,33 @@ def write_manifest(targets: list[tuple[str, int]]) -> Path:
         for wv in worldviews:
             prefix = f"{wv}_admin1_"
             if name.startswith(prefix):
-                countries_by_wv[wv].append(name[len(prefix):])
+                countries_by_wv[wv].append(name[len(prefix) :])
         # regional_TUR_nuts_1_ukr
         if name.startswith("regional_"):
             parts = name.split("_")
             wv = parts[-1]
             country = parts[1]
             set_name = "_".join(parts[2:-1])
-            regional_sets.append({
-                "country": country,
-                "set_id": set_name,
-                "worldview": wv,
-                "size_bytes": path.stat().st_size,
-            })
+            regional_sets.append(
+                {
+                    "country": country,
+                    "set_id": set_name,
+                    "worldview": wv,
+                    "size_bytes": path.stat().st_size,
+                }
+            )
         # composite_france_overseas_ukr
         elif name.startswith("composite_"):
             parts = name.split("_")
             wv = parts[-1]
             cid = "_".join(parts[1:-1])
-            composites.append({
-                "id": cid,
-                "worldview": wv,
-                "size_bytes": path.stat().st_size,
-            })
+            composites.append(
+                {
+                    "id": cid,
+                    "worldview": wv,
+                    "size_bytes": path.stat().st_size,
+                }
+            )
 
     manifest = {
         "ne_pinned_tag": NE_PINNED_TAG,
@@ -892,15 +972,16 @@ def write_manifest(targets: list[tuple[str, int]]) -> Path:
         "composites": composites,
     }
 
+    manifest_text = json.dumps(manifest, indent=2) + "\n"
     manifest_path = OUTPUT_DIR / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2))
+    manifest_path.write_text(manifest_text)
 
     # Also write a copy into the plugin source tree so the control
     # panel can `import manifest from '../data/manifest.json'` without
     # an async fetch at chart-edit time.
     plugin_data_dir = SCRIPT_DIR.parent / "src" / "data"
     plugin_data_dir.mkdir(parents=True, exist_ok=True)
-    (plugin_data_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    (plugin_data_dir / "manifest.json").write_text(manifest_text)
     log(
         f"\nWrote manifest.json — {len(worldviews)} worldview(s), "
         f"{sum(len(v) for v in countries_by_wv.values())} country files, "
@@ -915,32 +996,36 @@ def main() -> int:
     log(f"Country Map build — pinned to NE {NE_PINNED_TAG} ({NE_PINNED_SHA[:8]})")
 
     # Load configs
-    name_overrides = yaml.safe_load(
-        (CONFIG_DIR / "name_overrides.yaml").read_text()
-    )["overrides"]
-    flying_islands = yaml.safe_load(
-        (CONFIG_DIR / "flying_islands.yaml").read_text()
-    )
+    name_overrides = yaml.safe_load((CONFIG_DIR / "name_overrides.yaml").read_text())[
+        "overrides"
+    ]
+    flying_islands = yaml.safe_load((CONFIG_DIR / "flying_islands.yaml").read_text())
     territory_assignments = yaml.safe_load(
         (CONFIG_DIR / "territory_assignments.yaml").read_text()
     )
     regional_aggregations = yaml.safe_load(
         (CONFIG_DIR / "regional_aggregations.yaml").read_text()
     )
-    composite_maps = yaml.safe_load(
-        (CONFIG_DIR / "composite_maps.yaml").read_text()
-    )
+    composite_maps = yaml.safe_load((CONFIG_DIR / "composite_maps.yaml").read_text())
     log(f"Loaded {len(name_overrides)} name override entries")
-    log(f"Loaded flying_islands rules for {len(flying_islands.get('countries', {}))} countries")
-    log(f"Loaded territory_assignments rules for "
-        f"{len(territory_assignments.get('countries', {}))} countries")
+    log(
+        f"Loaded flying_islands rules for {len(flying_islands.get('countries', {}))} countries"
+    )
+    log(
+        f"Loaded territory_assignments rules for "
+        f"{len(territory_assignments.get('countries', {}))} countries"
+    )
     n_region_sets = sum(
         len(c.get("region_sets", {}))
         for c in regional_aggregations.get("countries", {}).values()
     )
-    log(f"Loaded regional_aggregations: {n_region_sets} region-sets across "
-        f"{len(regional_aggregations.get('countries', {}))} countries")
-    log(f"Loaded composite_maps: {len(composite_maps.get('composites', {}))} composites")
+    log(
+        f"Loaded regional_aggregations: {n_region_sets} region-sets across "
+        f"{len(regional_aggregations.get('countries', {}))} countries"
+    )
+    log(
+        f"Loaded composite_maps: {len(composite_maps.get('composites', {}))} composites"
+    )
 
     # POC scope: UA worldview, both Admin 0 and Admin 1. Future commits
     # add more worldviews (Default, and other major NE worldviews).

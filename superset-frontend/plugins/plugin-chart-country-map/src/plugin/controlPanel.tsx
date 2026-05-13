@@ -200,19 +200,17 @@ const REGION_SET_LABELS: Record<string, string> = {
 };
 
 // Build {country: [(set_id, label), ...]} from manifest.
-const REGION_SET_CHOICES_BY_COUNTRY: Record<string, Array<[string, string]>> = (
-  () => {
-    const out: Record<string, Array<[string, string]>> = {};
-    M.regional_aggregations.forEach(r => {
-      out[r.country] = out[r.country] || [];
-      out[r.country].push([
-        r.set_id,
-        REGION_SET_LABELS[r.set_id] || r.set_id,
-      ]);
-    });
-    return out;
-  }
-)();
+const REGION_SET_CHOICES_BY_COUNTRY: Record<
+  string,
+  Array<[string, string]>
+> = (() => {
+  const out: Record<string, Array<[string, string]>> = {};
+  M.regional_aggregations.forEach(r => {
+    out[r.country] = out[r.country] || [];
+    out[r.country].push([r.set_id, REGION_SET_LABELS[r.set_id] || r.set_id]);
+  });
+  return out;
+})();
 
 // Composite-map labels keyed by `<id>`.
 const COMPOSITE_LABELS: Record<string, string> = {
@@ -253,7 +251,8 @@ const NAME_LANGUAGE_CHOICES: Array<[string, string]> = [
 // ----------------------------------------------------------------------
 
 const isAdminCountry = (controls: Record<string, { value?: unknown }>) =>
-  controls.admin_level?.value === String(0) || controls.admin_level?.value === 0;
+  controls.admin_level?.value === String(0) ||
+  controls.admin_level?.value === 0;
 const isAdminAggregated = (controls: Record<string, { value?: unknown }>) =>
   controls.admin_level?.value === 'aggregated';
 
