@@ -25,6 +25,7 @@ import {
   getStandardizedControls,
 } from '@superset-ui/chart-controls';
 import manifest from '../data/manifest.json';
+import migrateFromLegacy from './migrateFromLegacy';
 
 // ----------------------------------------------------------------------
 // Choice tables — sourced from the build pipeline's manifest.json
@@ -96,9 +97,11 @@ const WORLDVIEW_CHOICES: Array<[string, string]> = M.worldviews.map(wv => [
   WORLDVIEW_LABELS[wv] || wv,
 ]);
 
+// Map scope choices. The underlying values stay 0/1/aggregated so saved
+// charts and form_data don't break — only the labels change for clarity.
 const ADMIN_LEVEL_CHOICES: Array<[string, string]> = [
-  [String(0), t('Countries (Admin 0)')],
-  [String(1), t('Subdivisions (Admin 1)')],
+  [String(0), t('World')],
+  [String(1), t('Country')],
   ['aggregated', t('Aggregated regions')],
 ];
 
@@ -316,10 +319,13 @@ const config: ControlPanelConfig = {
             name: 'admin_level',
             config: {
               type: 'SelectControl',
-              label: t('Admin level'),
+              label: t('Map view'),
               description: t(
-                'Choose the geographic level: countries (world map), ' +
-                  'subdivisions of one country, or an aggregated regional layer.',
+                'World shows all countries; Country shows subdivisions of ' +
+                  'one country (states/provinces/departments); Aggregated ' +
+                  "regions dissolves a country's subdivisions into coarser " +
+                  'administrative regions (e.g. French regions, Turkish ' +
+                  'NUTS-1 regions). Stored as admin_level (0 / 1 / aggregated).',
               ),
               choices: ADMIN_LEVEL_CHOICES,
               default: String(0),
@@ -528,11 +534,31 @@ const config: ControlPanelConfig = {
       renderTrigger: true,
     },
   },
-  formDataOverrides: formData => ({
-    ...formData,
-    entity: getStandardizedControls().shiftColumn(),
-    metric: getStandardizedControls().shiftMetric(),
-  }),
+  // formDataOverrides runs when the user switches a chart's viz_type to
+  // this plugin. We use it for two jobs:
+  //   1. Standard control hand-off (entity, metric) via getStandardizedControls
+  //   2. Migration from the legacy country_map plugin — translate the
+  //      legacy `select_country` value into admin_level / country /
+  //      composite / region_set so the new chart lands pre-populated
+  //      rather than dumping the user back to an empty Country dropdown.
+  formDataOverrides: formData => {
+    const fromLegacy =
+      typeof formData.select_country === 'string' && formData.select_country
+        ? migrateFromLegacy(formData)
+        : {};
+    return {
+      ...formData,
+      entity: getStandardizedControls().shiftColumn(),
+      metric: getStandardizedControls().shiftMetric(),
+      // Only fill fields the user has not already set on the new chart;
+      // explicit user edits on the new viz win over legacy migration.
+      ...Object.fromEntries(
+        Object.entries(fromLegacy).filter(
+          ([k]) => formData[k as keyof typeof formData] == null,
+        ),
+      ),
+    };
+  },
 };
 
 export default config;
