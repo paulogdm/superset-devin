@@ -48,13 +48,7 @@ export default class CountryMapChartPlugin extends ChartPlugin {
           'and aggregated regional layers.',
       ),
       name: t('Country Map'),
-      tags: [
-        t('2D'),
-        t('Comparison'),
-        t('Geo'),
-        t('Range'),
-        t('Report'),
-      ],
+      tags: [t('2D'), t('Comparison'), t('Geo'), t('Range'), t('Report')],
       // TODO: thumbnail + example images come in a follow-up commit
       // (need to render real outputs first).
       thumbnail: '',

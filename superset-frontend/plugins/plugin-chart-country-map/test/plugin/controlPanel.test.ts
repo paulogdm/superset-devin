@@ -108,9 +108,13 @@ test('country selector visibility hides on Admin 0', () => {
   expect(c).not.toBeNull();
   // Admin 0 (number 0 OR string "0") AND no composite → hidden
   expect(c.visibility({ controls: { admin_level: { value: 0 } } })).toBe(false);
-  expect(c.visibility({ controls: { admin_level: { value: '0' } } })).toBe(false);
+  expect(c.visibility({ controls: { admin_level: { value: '0' } } })).toBe(
+    false,
+  );
   // Admin 1 → visible
-  expect(c.visibility({ controls: { admin_level: { value: '1' } } })).toBe(true);
+  expect(c.visibility({ controls: { admin_level: { value: '1' } } })).toBe(
+    true,
+  );
   // Composite set → hidden regardless of admin_level
   expect(
     c.visibility({
@@ -128,8 +132,12 @@ test('region_set selector only visible when admin_level === aggregated', () => {
   expect(
     c.visibility({ controls: { admin_level: { value: 'aggregated' } } }),
   ).toBe(true);
-  expect(c.visibility({ controls: { admin_level: { value: '1' } } })).toBe(false);
-  expect(c.visibility({ controls: { admin_level: { value: '0' } } })).toBe(false);
+  expect(c.visibility({ controls: { admin_level: { value: '1' } } })).toBe(
+    false,
+  );
+  expect(c.visibility({ controls: { admin_level: { value: '0' } } })).toBe(
+    false,
+  );
 });
 
 test('region_set choices key off the selected country', () => {
