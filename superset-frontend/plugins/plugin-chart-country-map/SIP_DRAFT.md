@@ -446,35 +446,42 @@ The fixes that survive (France typos/ISO codes, Philippines admin renames, China
 ### Phase 2: Plugin scaffolding
 - [x] Scaffold `plugin-chart-country-map` directory matching modern plugin structure
 - [x] Register against `chart/data` endpoint (buildQuery + ChartPlugin class)
-- [x] Skeleton transformProps that derives `geoJsonUrl` from form_data using the build script's output naming
-- [x] Placeholder renderer that fetches the GeoJSON and shows diagnostics (compiles end-to-end)
-- [ ] Port rendering logic from legacy plugin (D3 paths, color scales, projection, interactions)
+- [x] transformProps derives `geoJsonUrl` from form_data using the build script's output naming
+- [x] D3 renderer ported to modern modules (d3-geo, d3-color, d3-array); fully typed, no @ts-nocheck; fit-to-selection projection
 - [ ] Wire actual GeoJSON output hosting path (currently stubbed to `/static/assets/country-maps/`)
+- [ ] Click-to-zoom interaction (legacy had this)
+- [ ] Cross-filter integration
+- [ ] Composite projection support (geoAlbersUsa for USA, etc.) at render time
 
 ### Phase 3: Controls
-- [ ] Worldview selector (options sourced from build manifest)
-- [ ] Admin level segmented control (0 / 1 / Aggregated)
-- [ ] Country selector (visible when admin_level !== 0)
-- [ ] Region set selector (when Aggregated chosen)
-- [ ] Composite selector (separate option in country picker)
-- [ ] Region include/exclude multi-selects
-- [ ] Flying islands toggle (default ON)
-- [ ] Name language selector (drives which NAME_<lang> field renders)
-- [ ] Fit-to-selection projection refit
+- [x] Worldview selector (hardcoded snapshot — manifest-driven in follow-up)
+- [x] Admin level segmented control (0 / 1 / Aggregated)
+- [x] Country selector (visible when admin_level !== 0)
+- [x] Region set selector (visible when admin_level === 'aggregated')
+- [x] Composite selector (overrides admin_level + country)
+- [x] Region include/exclude multi-selects
+- [x] Flying islands toggle (default ON)
+- [x] Name language selector (20 NE languages)
+- [x] Fit-to-selection projection refit (renderer auto-fits to filtered features)
+- [ ] Replace hardcoded choice tables with manifest-driven lookups
 
 ### Phase 4: Deprecation wiring
-- [ ] Banner on legacy plugin pointing at new chart type
+- [x] Add new VizType.CountryMapV2 = 'country_map_v2'
+- [x] Register new plugin in MainPreset alongside legacy
+- [x] Add @superset-ui/plugin-chart-country-map as workspace dep
+- [x] Mark legacy plugin with `label: ChartLabel.Deprecated` + explanation
+- [x] Rename legacy plugin's display to "Country Map (Legacy)"
 - [ ] "Switch to new Country Map" button + form_data migration logic
 - [ ] Auto-close superseded duplicate PRs (#32497, etc.) on merge
-- [ ] Add new viz_type to default chart-type registry
 
 ### Phase 5: Polish + docs
+- [x] Build manifest output (NE SHA + worldviews + admin levels + sizes)
+- [x] Tests: transformProps (10 cases) + buildQuery (3 cases)
 - [ ] UPDATING.md entry
-- [ ] Build manifest output (NE SHA + worldviews + admin levels included)
 - [ ] CI workflow that regenerates outputs and PRs the diff
 - [ ] Real example images / thumbnails for the chart type picker
 - [ ] Update Superset docs site
-- [ ] Tests: buildQuery, controlPanel, transformProps, build.py transforms
+- [ ] Tests: controlPanel, build.py transforms (Python)
 
 ## Current PR state (snapshot as of latest commit)
 
