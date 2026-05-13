@@ -376,6 +376,8 @@ def _projection_allowed(
         return False
     if entry.group_limit_key:
         return False
+    if query.group_limit is not None:
+        return False
     # Cached HAVING dropped sub-aggregate rows; the rolled-up totals would be
     # off. Conservative: skip the projection path when cached has any HAVING.
     if any(f.type == PredicateType.HAVING for f in entry.filters):
@@ -623,16 +625,14 @@ def _apply_post_processing(
         aggregates = {
             m.name: {
                 "column": m.name,
-                "operator": _AGGREGATION_TO_PANDAS[
-                    # Guarded by ``_projection_allowed`` — non-None and additive.
-                    m.aggregation  # type: ignore[index]
-                ],
+                "operator": _AGGREGATION_TO_PANDAS[m.aggregation],
             }
             for m in query.metrics
         }
         df = aggregate(df, groupby=groupby, aggregates=aggregates)
-        df = _apply_order(df, query.order)
         note_def = "Served from semantic view smart cache (re-aggregated locally)"
+
+    df = _apply_order(df, query.order)
 
     if query.limit is not None:
         df = df.head(query.limit)

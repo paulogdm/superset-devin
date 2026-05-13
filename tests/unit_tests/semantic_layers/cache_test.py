@@ -27,6 +27,7 @@ from superset_core.semantic_layers.types import (
     AggregationType,
     Dimension,
     Filter,
+    GroupLimit,
     Metric,
     Operator,
     OrderDirection,
@@ -445,6 +446,7 @@ def _projection_query(
     new_filters: set[Filter] | None = None,
     new_limit: int | None = None,
     new_order: Any = None,
+    new_group_limit: GroupLimit | None = None,
 ) -> tuple[CachedEntry, SemanticQuery]:
     cached_q = SemanticQuery(
         metrics=metrics,
@@ -458,6 +460,7 @@ def _projection_query(
         filters=new_filters,
         limit=new_limit,
         order=new_order,
+        group_limit=new_group_limit,
     )
     return entry_from(cached_q), new_q
 
@@ -594,6 +597,24 @@ def test_projection_with_order_and_limit() -> None:
     assert df["sum_x"].tolist() == [100]
 
 
+def test_apply_post_processing_sorts_before_limit_for_non_projection() -> None:
+    cached_df = pd.DataFrame({"a": ["x", "y", "z"], "x": [1.0, 100.0, 50.0]})
+    cached = SemanticResult(
+        requests=[],
+        results=pa.Table.from_pandas(cached_df, preserve_index=False),
+    )
+    new_q = SemanticQuery(
+        metrics=[M_X],
+        dimensions=[COL_A],
+        order=[(M_X, OrderDirection.DESC)],
+        limit=2,
+    )
+
+    out = _apply_post_processing(cached, new_q, set(), False)
+    df = out.results.to_pandas()
+    assert df["x"].tolist() == [100.0, 50.0]
+
+
 def test_projection_rejected_when_metric_aggregation_unknown() -> None:
     entry, new_q = _projection_query(
         metrics=[M_UNKNOWN],
@@ -632,6 +653,23 @@ def test_projection_rejected_when_cached_has_having() -> None:
         cached_dimensions=[COL_A, COL_B],
         cached_filters={having(M_SUM, Operator.GREATER_THAN, 10)},
         new_filters={having(M_SUM, Operator.GREATER_THAN, 10)},
+    )
+    ok, _, _ = can_satisfy(entry, new_q)
+    assert ok is False
+
+
+def test_projection_rejected_when_new_query_has_group_limit() -> None:
+    group_limit = GroupLimit(
+        dimensions=[COL_A],
+        top=2,
+        metric=M_SUM,
+        direction=OrderDirection.DESC,
+    )
+    entry, new_q = _projection_query(
+        metrics=[M_SUM],
+        new_dimensions=[COL_A],
+        cached_dimensions=[COL_A, COL_B],
+        new_group_limit=group_limit,
     )
     ok, _, _ = can_satisfy(entry, new_q)
     assert ok is False
