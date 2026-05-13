@@ -254,8 +254,6 @@ const NAME_LANGUAGE_CHOICES: Array<[string, string]> = [
 
 const isAdminCountry = (controls: Record<string, { value?: unknown }>) =>
   controls.admin_level?.value === String(0) || controls.admin_level?.value === 0;
-const isAdminSubdivision = (controls: Record<string, { value?: unknown }>) =>
-  controls.admin_level?.value === String(1) || controls.admin_level?.value === 1;
 const isAdminAggregated = (controls: Record<string, { value?: unknown }>) =>
   controls.admin_level?.value === 'aggregated';
 

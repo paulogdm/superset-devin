@@ -29,7 +29,6 @@ import { extent } from 'd3-array';
 import { rgb } from 'd3-color';
 import { geoMercator, geoPath } from 'd3-geo';
 import {
-  CategoricalColorNamespace,
   getNumberFormatter,
   getSequentialSchemeRegistry,
 } from '@superset-ui/core';
@@ -131,7 +130,9 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
   // ---- Load GeoJSON ----------------------------------------------------
   useEffect(() => {
     if (!geoJsonUrl) {
-      setError('No GeoJSON URL resolved (check worldview / admin_level / country).');
+      setError(
+        'No GeoJSON URL resolved (check worldview / admin_level / country).',
+      );
       setGeo(null);
       return;
     }
@@ -168,8 +169,11 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
     if (!data.length || !metricName) return {};
     const numericData = data
       .map(d => ({
-        key: String(d[Object.keys(d).find(k => k !== metricName) || 'key'] ?? ''),
-        value: typeof d[metricName] === 'number' ? (d[metricName] as number) : NaN,
+        key: String(
+          d[Object.keys(d).find(k => k !== metricName) || 'key'] ?? '',
+        ),
+        value:
+          typeof d[metricName] === 'number' ? (d[metricName] as number) : NaN,
       }))
       .filter(d => Number.isFinite(d.value));
     if (!numericData.length) return {};
@@ -178,9 +182,7 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
     const scheme = linearColorScheme
       ? getSequentialSchemeRegistry().get(linearColorScheme)
       : null;
-    const linear = scheme
-      ? scheme.createLinearScale([lo, hi])
-      : (() => '#ccc');
+    const linear = scheme ? scheme.createLinearScale([lo, hi]) : () => '#ccc';
 
     const out: Record<string, string> = {};
     numericData.forEach(d => {
@@ -190,7 +192,10 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
   }, [data, metricName, linearColorScheme]);
 
   const formatter = useMemo(
-    () => (numberFormat ? getNumberFormatter(numberFormat) : (n: number) => String(n)),
+    () =>
+      numberFormat
+        ? getNumberFormatter(numberFormat)
+        : (n: number) => String(n),
     [numberFormat],
   );
 
@@ -208,7 +213,10 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
       type: 'FeatureCollection',
       features: filteredFeatures,
     };
-    const projection = geoMercator().fitSize([width, height], featureCollection);
+    const projection = geoMercator().fitSize(
+      [width, height],
+      featureCollection,
+    );
     const path = geoPath(projection);
 
     const ns = 'http://www.w3.org/2000/svg';
@@ -309,7 +317,9 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
 
   if (error) {
     return (
-      <div style={{ ...containerStyle, width, height, padding: 16, color: '#c00' }}>
+      <div
+        style={{ ...containerStyle, width, height, padding: 16, color: '#c00' }}
+      >
         Error loading map: {error}
       </div>
     );
@@ -336,7 +346,19 @@ const CountryMap: FC<CountryMapTransformedProps> = props => {
           )}
         </div>
       )}
-      {!geo && <div style={{ position: 'absolute', top: 8, left: 8, fontSize: 11, color: '#888' }}>Loading map…</div>}
+      {!geo && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            fontSize: 11,
+            color: '#888',
+          }}
+        >
+          Loading map…
+        </div>
+      )}
     </div>
   );
 };

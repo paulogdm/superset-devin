@@ -18,6 +18,7 @@
  */
 import {
   CountryMapChartProps,
+  CountryMapFormData,
   CountryMapTransformedProps,
 } from '../types';
 
@@ -40,7 +41,8 @@ const GEOJSON_BASE = '/static/assets/country-maps';
 export default function transformProps(
   chartProps: CountryMapChartProps,
 ): CountryMapTransformedProps {
-  const { formData, queriesData, width, height } = chartProps;
+  const { queriesData, width, height } = chartProps;
+  const formData = chartProps.formData as CountryMapFormData;
   const data = (queriesData?.[0]?.data as Record<string, unknown>[]) ?? [];
 
   const worldview = formData.worldview || 'ukr';
@@ -50,11 +52,9 @@ export default function transformProps(
   if (formData.composite) {
     geoJsonUrl = `${GEOJSON_BASE}/composite_${formData.composite}_${worldview}.geo.json`;
   } else if (formData.region_set && formData.country) {
-    geoJsonUrl =
-      `${GEOJSON_BASE}/regional_${formData.country}_${formData.region_set}_${worldview}.geo.json`;
+    geoJsonUrl = `${GEOJSON_BASE}/regional_${formData.country}_${formData.region_set}_${worldview}.geo.json`;
   } else if (adminLevel === 1 && formData.country) {
-    geoJsonUrl =
-      `${GEOJSON_BASE}/${worldview}_admin1_${formData.country}.geo.json`;
+    geoJsonUrl = `${GEOJSON_BASE}/${worldview}_admin1_${formData.country}.geo.json`;
   } else if (adminLevel === 0) {
     geoJsonUrl = `${GEOJSON_BASE}/${worldview}_admin0.geo.json`;
   }

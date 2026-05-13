@@ -4,9 +4,10 @@
     "baseUrl": "../..",
     "outDir": "lib",
     "rootDir": "src",
-    "declarationDir": "lib"
+    "declarationDir": "lib",
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "types/**/*"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json", "types/**/*"],
   "exclude": [
     "src/**/*.js",
     "src/**/*.jsx",
