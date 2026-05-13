@@ -18,10 +18,7 @@
  */
 import { ChartProps } from '@superset-ui/core';
 import transformProps from '../../src/plugin/transformProps';
-import {
-  CountryMapChartProps,
-  CountryMapFormData,
-} from '../../src/types';
+import { CountryMapChartProps, CountryMapFormData } from '../../src/types';
 
 const baseFormData: CountryMapFormData = {
   datasource: '3__table',
@@ -43,7 +40,9 @@ test('Admin 0 (no country) → world choropleth URL', () => {
   const out = transformProps(
     buildChartProps({ admin_level: 0, worldview: 'ukr' }),
   );
-  expect(out.geoJsonUrl).toBe('/static/assets/country-maps/ukr_admin0.geo.json');
+  expect(out.geoJsonUrl).toBe(
+    '/static/assets/country-maps/ukr_admin0.geo.json',
+  );
 });
 
 test('Admin 1 + country → per-country file URL', () => {
@@ -85,7 +84,9 @@ test('Composite overrides admin_level + country', () => {
 
 test('Worldview defaults to ukr when not specified', () => {
   const out = transformProps(buildChartProps({ admin_level: 0 }));
-  expect(out.geoJsonUrl).toBe('/static/assets/country-maps/ukr_admin0.geo.json');
+  expect(out.geoJsonUrl).toBe(
+    '/static/assets/country-maps/ukr_admin0.geo.json',
+  );
 });
 
 test('Different worldview reflected in URL', () => {
