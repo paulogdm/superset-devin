@@ -16,6 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { act } from 'react';
+import { getInstance as getTestBackend } from 'react-dnd-test-backend';
 import {
   fireEvent,
   render,
@@ -208,15 +210,12 @@ test('can drop only selected metrics', () => {
   expect(currentSelection).toBeInTheDocument();
 });
 
-// TODO(react18): same as DndMetricSelect > "can drag metrics" — see the long
-// comment there for the three concrete fix paths (react-dnd v16 upgrade,
-// react-dnd-test-backend in the test wrapper, or mocking
-// getBoundingClientRect/getClientOffset locally).
-// eslint-disable-next-line jest/no-disabled-tests
-test.skip('can drag and reorder items', async () => {
+test('can drag and reorder items', async () => {
   const values = ['column_a', 'metric_a', 'column_b'];
   render(<DndColumnMetricSelect {...defaultProps} value={values} multi />, {
-    useDnd: true,
+    // TestBackend bypasses the HTML5 drag-event pipeline (which jsdom
+    // doesn't fully implement) and lets us drive drags via simulate* calls.
+    useDnd: 'test',
     useRedux: true,
   });
 
@@ -229,10 +228,24 @@ test.skip('can drag and reorder items', async () => {
   expect(within(firstItem).getByText('column_a')).toBeVisible();
   expect(within(lastItem).getByText('Column B')).toBeVisible();
 
-  fireEvent.dragStart(firstItem);
-  fireEvent.dragEnter(lastItem);
-  fireEvent.dragOver(lastItem);
-  fireEvent.drop(lastItem);
+  const sourceId = firstItem
+    .querySelector('[data-drag-source-id]')!
+    .getAttribute('data-drag-source-id')!;
+  const targetId = lastItem
+    .querySelector('[data-drop-target-id]')!
+    .getAttribute('data-drop-target-id')!;
+  const backend = getTestBackend()!;
+  act(() => {
+    backend.simulateBeginDrag([sourceId]);
+    // Pass a clientOffset past the hover midpoint so OptionWrapper.hover /
+    // OptionControls.hover fire the reorder instead of bailing on the
+    // jsdom zero-rect.
+    backend.simulateHover([targetId], {
+      clientOffset: { x: 0, y: 100 },
+    } as any);
+    backend.simulateDrop();
+    backend.simulateEndDrag();
+  });
 
   expect(container).toBeInTheDocument();
 });

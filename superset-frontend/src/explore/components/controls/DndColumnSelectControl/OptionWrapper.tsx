@@ -67,18 +67,24 @@ export default function OptionWrapper(
   const ref = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
 
-  const [{ isDragging }, drag] = useDrag({
+  const [{ isDragging, dragSourceId }, drag] = useDrag({
     item: {
       type,
       dragIndex: index,
     },
     collect: (monitor: DragSourceMonitor) => ({
       isDragging: monitor.isDragging(),
+      // Exposed via `data-drag-source-id` so tests using react-dnd-test-backend
+      // can drive drags programmatically without DOM-event simulation.
+      dragSourceId: monitor.getHandlerId(),
     }),
   });
 
-  const [, drop] = useDrop({
+  const [{ dropTargetId }, drop] = useDrop({
     accept: type,
+    collect: (monitor: DropTargetMonitor) => ({
+      dropTargetId: monitor.getHandlerId(),
+    }),
 
     hover: (item: OptionItemInterface, monitor: DropTargetMonitor) => {
       if (!ref.current) {
@@ -182,7 +188,12 @@ export default function OptionWrapper(
   drag(drop(ref));
 
   return (
-    <DragContainer ref={ref} {...rest}>
+    <DragContainer
+      ref={ref}
+      data-drag-source-id={dragSourceId ?? undefined}
+      data-drop-target-id={dropTargetId ?? undefined}
+      {...rest}
+    >
       <Option
         index={index}
         clickClose={clickClose}

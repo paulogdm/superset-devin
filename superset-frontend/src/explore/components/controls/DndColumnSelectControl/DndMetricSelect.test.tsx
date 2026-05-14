@@ -16,6 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { act } from 'react';
+import { getInstance as getTestBackend } from 'react-dnd-test-backend';
 import {
   fireEvent,
   render,
@@ -311,32 +313,12 @@ test('update adhoc metric name when column label in dataset changes', () => {
   expect(screen.getByText('SUM(new col B name)')).toBeVisible();
 });
 
-// TODO(react18): re-enable. Under React 18 + react-dnd@^11 the dragStart redux
-// dispatch from the HTML5 backend doesn't reach `monitor.isDragging()` before
-// the next fireEvent, so reorder-within-list drag tests (combined useDrag +
-// useDrop on the same element) raise "Cannot call hover while not dragging"
-// at drop. Source-only drag tests in this same file pass.
-//
-// Way forward (any of these will fix it, pick one):
-//   1. Bump `react-dnd`/`react-dnd-html5-backend` to ^16; verified locally
-//      that the Invariant goes away, but v14+ also tightened `useDrag` to
-//      require a top-level `type` field, so every `useDrag({ item: {...} })`
-//      callsite (DatasourcePanelDragOption, OptionWrapper, OptionControls,
-//      and the dashboard legacy `DragSource` HOC sites) must be migrated —
-//      out of scope for the React 18 bump; do it as a follow-up.
-//   2. Switch the *test* wrapper (`spec/helpers/testing-library.tsx`) to
-//      `react-dnd-test-backend` for `useDnd: true` renders and drive drags
-//      via the backend's programmatic API instead of `fireEvent.dragStart`.
-//      Avoids the jsdom HTML5-event/preventDefault gap entirely and is the
-//      pattern react-dnd recommends for tests.
-//   3. Keep HTML5Backend but mock `getBoundingClientRect` and
-//      `monitor.getClientOffset` in this file so OptionWrapper.hover's
-//      midpoint comparison fires `onShiftOptions` deterministically.
-// eslint-disable-next-line jest/no-disabled-tests
-test.skip('can drag metrics', async () => {
+test('can drag metrics', async () => {
   const metricValues = ['metric_a', 'metric_b', adhocMetricB];
   render(<DndMetricSelect {...defaultProps} value={metricValues} multi />, {
-    useDnd: true,
+    // TestBackend bypasses the HTML5 drag-event pipeline (which jsdom
+    // doesn't fully implement) and lets us drive drags via simulate* calls.
+    useDnd: 'test',
     useRedux: true,
   });
 
@@ -354,10 +336,23 @@ test.skip('can drag metrics', async () => {
   fireEvent.mouseOver(within(firstMetric).getByText('metric_a'));
   expect(await screen.findByText('Metric name')).toBeInTheDocument();
 
-  fireEvent.dragStart(firstMetric);
-  fireEvent.dragEnter(lastMetric);
-  fireEvent.dragOver(lastMetric);
-  fireEvent.drop(lastMetric);
+  const sourceId = firstMetric
+    .querySelector('[data-drag-source-id]')!
+    .getAttribute('data-drag-source-id')!;
+  const targetId = lastMetric
+    .querySelector('[data-drop-target-id]')!
+    .getAttribute('data-drop-target-id')!;
+  const backend = getTestBackend()!;
+  act(() => {
+    backend.simulateBeginDrag([sourceId]);
+    // Pass a clientOffset past the hover midpoint so OptionControls.hover
+    // fires onMoveLabel instead of bailing on the jsdom zero-rect.
+    backend.simulateHover([targetId], {
+      clientOffset: { x: 0, y: 100 },
+    } as any);
+    backend.simulateDrop();
+    backend.simulateEndDrag();
+  });
 
   expect(within(firstMetric).getByText('SUM(Column B)')).toBeVisible();
   expect(within(lastMetric).getByText('metric_a')).toBeVisible();

@@ -37,6 +37,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { TestBackend } from 'react-dnd-test-backend';
 import reducerIndex from 'spec/helpers/reducerIndex';
 import { QueryParamProvider } from 'use-query-params';
 import { ReactRouter5Adapter } from 'use-query-params/adapters/react-router-5';
@@ -46,7 +47,11 @@ import userEvent from '@testing-library/user-event';
 
 type Options = Omit<RenderOptions, 'queries'> & {
   useRedux?: boolean;
-  useDnd?: boolean;
+  // `true` -> HTML5Backend (default; matches browser).
+  // `'test'` -> TestBackend, drive drags programmatically via
+  // `react-dnd-test-backend` `getInstance()` — avoids the jsdom
+  // HTML5-drag-event / preventDefault / zero-rect gaps.
+  useDnd?: boolean | 'test';
   useQueryParams?: boolean;
   useRouter?: boolean;
   useTheme?: boolean;
@@ -97,8 +102,9 @@ export function createWrapper(options?: Options) {
     }
 
     if (useDnd) {
+      const backend = useDnd === 'test' ? TestBackend : HTML5Backend;
       // @ts-expect-error react-dnd types not updated for React 18
-      result = <DndProvider backend={HTML5Backend}>{result}</DndProvider>;
+      result = <DndProvider backend={backend}>{result}</DndProvider>;
     }
 
     if (useRedux || store) {

@@ -275,8 +275,11 @@ export const OptionControlLabel = ({
   const ref = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const hasMetricName = savedMetric?.metric_name;
-  const [, drop] = useDrop({
+  const [{ dropTargetId }, drop] = useDrop({
     accept: type,
+    collect: (monitor: DropTargetMonitor) => ({
+      dropTargetId: monitor.getHandlerId(),
+    }),
     drop() {
       if (!multi) {
         return;
@@ -328,7 +331,7 @@ export const OptionControlLabel = ({
       item.dragIndex = hoverIndex;
     },
   });
-  const [{ isDragging }, drag] = useDrag({
+  const [{ isDragging, dragSourceId }, drag] = useDrag({
     item: {
       type,
       dragIndex: index,
@@ -336,6 +339,9 @@ export const OptionControlLabel = ({
     },
     collect: monitor => ({
       isDragging: monitor.isDragging(),
+      // Exposed via `data-drag-source-id` so tests using react-dnd-test-backend
+      // can drive drags programmatically without DOM-event simulation.
+      dragSourceId: monitor.getHandlerId(),
     }),
   });
 
@@ -424,5 +430,13 @@ export const OptionControlLabel = ({
   );
 
   drag(drop(ref));
-  return <DragContainer ref={ref}>{getOptionControlContent()}</DragContainer>;
+  return (
+    <DragContainer
+      ref={ref}
+      data-drag-source-id={dragSourceId ?? undefined}
+      data-drop-target-id={dropTargetId ?? undefined}
+    >
+      {getOptionControlContent()}
+    </DragContainer>
+  );
 };
