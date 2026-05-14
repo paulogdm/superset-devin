@@ -25,6 +25,35 @@ import * as CoreTheme from '@apache-superset/core/theme';
 import { Menu } from './Menu';
 import * as getBootstrapData from 'src/utils/getBootstrapData';
 
+// Capture what `<GenericLink to={...}>` receives so the SPA-route regression
+// tests can assert on the value handed to react-router-dom (which applies its
+// own basename in production via `<Router basename={applicationRoot()}>` in
+// src/views/App.tsx). The test harness's `<BrowserRouter>` has no basename,
+// so asserting on the rendered `<a href>` wouldn't catch the double-prefix.
+let observedGenericLinkTo: unknown = null;
+jest.mock('src/components/GenericLink', () => ({
+  __esModule: true,
+  GenericLink: ({
+    to,
+    children,
+    ...rest
+  }: {
+    to: unknown;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => {
+    observedGenericLinkTo = to;
+    return (
+      <a
+        href={typeof to === 'string' ? to : '#'}
+        {...(rest as Record<string, unknown>)}
+      >
+        {children}
+      </a>
+    );
+  },
+}));
+
 jest.mock('@apache-superset/core/theme', () => ({
   ...jest.requireActual('@apache-superset/core/theme'),
   useTheme: jest.fn(),
@@ -795,4 +824,120 @@ test('brand link falls back to brand.path when theme brandLogoUrl is absent', as
   });
   // ensureAppRoot must have been applied: /welcome/ → /superset/welcome/
   expect(brandLink).toHaveAttribute('href', '/superset/welcome/');
+});
+
+// Regression: the real backend emits `brand.path` and `brand.icon` already
+// carrying the app root (because they pass through `url_for`). The frontend
+// must not double-prefix them — neither via
+// `ensureAppRoot`/`ensureStaticPrefix` nor via React Router's `basename`
+// re-prepend.
+//
+// In production the SPA-route branch goes through `<GenericLink to={...}> ->
+// react-router-dom <Link>`, and the Router's `basename={applicationRoot()}`
+// (src/views/App.tsx) re-prepends the app root to the rendered `href`. The
+// test harness's `<BrowserRouter>` has no basename, so asserting on the
+// rendered `<a href>` wouldn't catch the bug. Instead we mock `GenericLink`
+// at module load (top of this file) and assert the path *handed to it*
+// already has the root stripped — the value the production Router will then
+// safely re-prepend.
+
+test('brand link hands a root-stripped path to GenericLink when brand.path arrives already rooted (SPA route)', async () => {
+  observedGenericLinkTo = null;
+  applicationRootMock.mockReturnValue('/superset');
+  staticAssetsPrefixMock.mockReturnValue('/superset');
+  useSelectorMock.mockReturnValue({ roles: user.roles });
+
+  const propsWithRootedBrand = {
+    ...mockedProps,
+    isFrontendRoute: () => true,
+    data: {
+      ...mockedProps.data,
+      brand: {
+        ...mockedProps.data.brand,
+        path: '/superset/welcome/',
+        icon: '/superset/static/assets/images/superset-logo-horiz.png',
+      },
+    },
+  };
+
+  render(<Menu {...propsWithRootedBrand} />, {
+    useRedux: true,
+    useQueryParams: true,
+    useRouter: true,
+    useTheme: true,
+  });
+
+  // Wait for the mocked GenericLink to render.
+  await screen.findByRole('link', {
+    name: new RegExp(propsWithRootedBrand.data.brand.alt, 'i'),
+  });
+  expect(observedGenericLinkTo).toBe('/welcome/');
+});
+
+test('brand link is single-prefix when brand.path arrives already rooted (non-SPA route)', async () => {
+  applicationRootMock.mockReturnValue('/superset');
+  staticAssetsPrefixMock.mockReturnValue('/superset');
+  useSelectorMock.mockReturnValue({ roles: user.roles });
+
+  const propsWithRootedBrand = {
+    ...mockedProps,
+    isFrontendRoute: () => false,
+    data: {
+      ...mockedProps.data,
+      brand: {
+        ...mockedProps.data.brand,
+        path: '/superset/welcome/',
+        icon: '/superset/static/assets/images/superset-logo-horiz.png',
+      },
+    },
+  };
+
+  render(<Menu {...propsWithRootedBrand} />, {
+    useRedux: true,
+    useQueryParams: true,
+    useRouter: true,
+    useTheme: true,
+  });
+
+  const brandLink = await screen.findByRole('link', {
+    name: new RegExp(propsWithRootedBrand.data.brand.alt, 'i'),
+  });
+  expect(brandLink).toHaveAttribute('href', '/superset/welcome/');
+  const brandImg = brandLink.querySelector('img');
+  expect(brandImg).toHaveAttribute(
+    'src',
+    '/superset/static/assets/images/superset-logo-horiz.png',
+  );
+});
+
+test('brand link strips a nested application root before handing to GenericLink', async () => {
+  observedGenericLinkTo = null;
+  applicationRootMock.mockReturnValue('/preset/superset');
+  staticAssetsPrefixMock.mockReturnValue('/preset/superset');
+  useSelectorMock.mockReturnValue({ roles: user.roles });
+
+  const propsWithRootedBrand = {
+    ...mockedProps,
+    isFrontendRoute: () => true,
+    data: {
+      ...mockedProps.data,
+      brand: {
+        ...mockedProps.data.brand,
+        path: '/preset/superset/welcome/',
+        icon: '/preset/superset/static/assets/images/superset-logo-horiz.png',
+      },
+    },
+  };
+
+  render(<Menu {...propsWithRootedBrand} />, {
+    useRedux: true,
+    useQueryParams: true,
+    useRouter: true,
+    useTheme: true,
+  });
+
+  await screen.findByRole('link', {
+    name: new RegExp(propsWithRootedBrand.data.brand.alt, 'i'),
+  });
+  expect(observedGenericLinkTo).toBe('/welcome/');
 });

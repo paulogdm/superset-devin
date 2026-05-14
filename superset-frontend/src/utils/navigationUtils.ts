@@ -21,13 +21,13 @@ import {
   type AnchorHTMLAttributes,
   type ReactElement,
 } from 'react';
-import { ensureAppRoot, makeUrl } from './pathUtils';
+import { ensureAppRoot, makeUrl, stripAppRoot } from './pathUtils';
 
 // Re-export so callers that legitimately need a raw prefixed path (native
 // fetch, navigator.sendBeacon, image src, third-party `href` props) have a
 // single sanctioned import location. The static-invariant scan disallows
 // importing from `pathUtils` directly outside this module.
-export { ensureAppRoot, makeUrl };
+export { ensureAppRoot, makeUrl, stripAppRoot };
 
 // `navigateTo` and `navigateWithState` are declared first so the focused
 // helpers below can call them without tripping oxlint's no-use-before-define

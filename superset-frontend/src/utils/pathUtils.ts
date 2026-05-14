@@ -41,7 +41,15 @@ export function ensureAppRoot(path: string): string {
   if (SAFE_ABSOLUTE_URL_RE.test(path) || path.startsWith('//')) {
     return path;
   }
-  return `${applicationRoot()}${path.startsWith('/') ? path : `/${path}`}`;
+  const root = applicationRoot();
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (
+    root &&
+    (normalizedPath === root || normalizedPath.startsWith(`${root}/`))
+  ) {
+    return normalizedPath;
+  }
+  return `${root}${normalizedPath}`;
 }
 
 /**
@@ -60,4 +68,30 @@ export function ensureAppRoot(path: string): string {
  */
 export function makeUrl(path: string): string {
   return ensureAppRoot(path);
+}
+
+/**
+ * Returns the path with a leading application-root segment removed. Useful when
+ * handing an already-rooted path to a consumer that re-prepends the root —
+ * e.g. react-router-dom's Link resolves its `to` prop against the Router's
+ * `basename`, so passing an already-rooted path would result in a doubled
+ * prefix in the rendered anchor href.
+ *
+ * Idempotent: stripping a path that does not start with the application root
+ * returns it unchanged. Absolute URLs and protocol-relative URLs pass through.
+ *
+ * @param path - The path to strip
+ * @returns The path without a leading application-root segment
+ */
+export function stripAppRoot(path: string): string {
+  if (SAFE_ABSOLUTE_URL_RE.test(path) || path.startsWith('//')) {
+    return path;
+  }
+  const root = applicationRoot();
+  if (!root) return path;
+  if (path === root) return '/';
+  if (path.startsWith(`${root}/`)) {
+    return path.slice(root.length);
+  }
+  return path;
 }

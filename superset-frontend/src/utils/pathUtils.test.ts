@@ -229,3 +229,72 @@ test('ensureAppRoot should prefix unknown schemes instead of passing through', a
   // Unknown / custom schemes are treated as relative paths
   expect(ensureAppRoot('foo:bar')).toBe('/superset/foo:bar');
 });
+
+test('ensureAppRoot should be idempotent — not double-prefix an already-prefixed path', async () => {
+  const { ensureAppRoot } = await loadPathUtils('/superset/');
+
+  const once = ensureAppRoot('/sqllab');
+  const twice = ensureAppRoot(once);
+  expect(twice).toBe(once); // /superset/sqllab, NOT /superset/superset/sqllab
+});
+
+test('makeUrl should be idempotent with subdirectory prefix', async () => {
+  const { makeUrl } = await loadPathUtils('/superset/');
+
+  const once = makeUrl('/sqllab?new=true');
+  const twice = makeUrl(once);
+  expect(twice).toBe(once); // /superset/sqllab?new=true, NOT /superset/superset/sqllab?new=true
+});
+
+test('stripAppRoot is a no-op when application root is empty', async () => {
+  document.body.innerHTML = '';
+  jest.resetModules();
+  const { stripAppRoot } = await import('./pathUtils');
+
+  expect(stripAppRoot('/welcome/')).toBe('/welcome/');
+  expect(stripAppRoot('/sqllab')).toBe('/sqllab');
+});
+
+test('stripAppRoot removes a leading application root from an already-rooted path', async () => {
+  const { stripAppRoot } = await loadPathUtils('/superset/');
+
+  expect(stripAppRoot('/superset/welcome/')).toBe('/welcome/');
+  expect(stripAppRoot('/superset/dashboard/list/')).toBe('/dashboard/list/');
+});
+
+test('stripAppRoot is idempotent — a path without the root is returned unchanged', async () => {
+  const { stripAppRoot } = await loadPathUtils('/superset/');
+
+  expect(stripAppRoot('/welcome/')).toBe('/welcome/');
+  expect(stripAppRoot(stripAppRoot('/superset/welcome/'))).toBe('/welcome/');
+});
+
+test('stripAppRoot returns "/" when given the bare application root', async () => {
+  const { stripAppRoot } = await loadPathUtils('/superset/');
+
+  expect(stripAppRoot('/superset')).toBe('/');
+});
+
+test('stripAppRoot respects segment boundaries — `/supersetfoo` is not the root', async () => {
+  const { stripAppRoot } = await loadPathUtils('/superset/');
+
+  expect(stripAppRoot('/supersetfoo/welcome/')).toBe('/supersetfoo/welcome/');
+});
+
+test('stripAppRoot handles nested application roots', async () => {
+  const { stripAppRoot } = await loadPathUtils('/preset/superset/');
+
+  expect(stripAppRoot('/preset/superset/welcome/')).toBe('/welcome/');
+  expect(stripAppRoot('/welcome/')).toBe('/welcome/');
+});
+
+test('stripAppRoot passes absolute and protocol-relative URLs through', async () => {
+  const { stripAppRoot } = await loadPathUtils('/superset/');
+
+  expect(stripAppRoot('https://example.com/superset/welcome/')).toBe(
+    'https://example.com/superset/welcome/',
+  );
+  expect(stripAppRoot('//cdn.example.com/superset/x.png')).toBe(
+    '//cdn.example.com/superset/x.png',
+  );
+});

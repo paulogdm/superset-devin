@@ -20,7 +20,7 @@ import { useState, useEffect } from 'react';
 import { styled, css, useTheme } from '@apache-superset/core/theme';
 import { t } from '@apache-superset/core/translation';
 import { ensureStaticPrefix } from 'src/utils/assetUrl';
-import { ensureAppRoot } from 'src/utils/navigationUtils';
+import { ensureAppRoot, stripAppRoot } from 'src/utils/navigationUtils';
 import { getUrlParam } from 'src/utils/urlUtils';
 import { MainNav, MenuItem } from '@superset-ui/core/components/Menu';
 import { Tooltip, Grid, Row, Col, Image } from '@superset-ui/core/components';
@@ -308,8 +308,12 @@ export function Menu({
       // ---------------------------------------------------------------------------------
       // TODO: deprecate this once Theme is fully rolled out
       // Kept as is for backwards compatibility with the old theme system / superset_config.py
+      //
+      // `<Router basename={applicationRoot()}>` re-prepends the app root to the
+      // `to` prop, so handing it an already-rooted `brand.path` would render a
+      // doubled `/superset/superset/...` href. Strip the root first.
       link = (
-        <GenericLink className="navbar-brand" to={brand.path}>
+        <GenericLink className="navbar-brand" to={stripAppRoot(brand.path)}>
           <StyledImage
             preview={false}
             src={ensureStaticPrefix(brand.icon)}
