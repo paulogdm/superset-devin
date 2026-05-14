@@ -1,0 +1,44 @@
+name: Devin PR Review
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  devin-review:
+    name: Trigger Devin review
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Trigger Devin playbook
+        env:
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          REPO: ${{ github.repository }}
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer $DEVIN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"prompt\": \"Review PR #${PR_NUMBER} in ${REPO}: ${PR_TITLE}\n\nPR URL: ${PR_URL}\",
+              \"playbook_id\": \"17906238791946a9b29fe7cfe5b1ec5d\",
+              \"title\": \"PR #${PR_NUMBER} review — ${REPO}\"
+            }" \
+            https://api.devin.ai/v1/sessions)
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+
+          if [ "$http_code" != "200" ]; then
+            echo "Devin API returned HTTP $http_code"
+            echo "$body"
+            exit 1
+          fi
+
+          session_url=$(echo "$body" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
+          session_id=$(echo "$body" | grep -o '"session_id":"[^"]*"' | cut -d'"' -f4)
+          echo "Devin session created: $session_id"
+          echo "Session URL: $session_url"
