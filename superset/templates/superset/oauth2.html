@@ -22,7 +22,7 @@ under the License.
     <meta charset="utf-8">
   </head>
   <body>
-    <script>
+    <script nonce="{{ get_nonce() }}">
       const message = { tabId: '{{ tab_id }}' };
       if (typeof BroadcastChannel !== 'undefined') {
         const channel = new BroadcastChannel('oauth');
