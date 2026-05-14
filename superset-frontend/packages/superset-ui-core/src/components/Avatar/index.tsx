@@ -17,15 +17,16 @@
  * under the License.
  */
 
+import { forwardRef } from 'react';
 import { Avatar as AntdAvatar } from 'antd';
 import type { AvatarProps, GroupProps as AvatarGroupProps } from './types';
 
-export function Avatar(props: AvatarProps) {
-  return <AntdAvatar {...props} />;
-}
+export const Avatar = forwardRef<HTMLSpanElement, AvatarProps>((props, ref) => (
+  <AntdAvatar ref={ref} {...props} />
+));
 
-export function AvatarGroup(props: AvatarGroupProps) {
-  return <AntdAvatar.Group {...props} />;
-}
+export const AvatarGroup = forwardRef<HTMLDivElement, AvatarGroupProps>(
+  (props, ref) => <AntdAvatar.Group ref={ref} {...props} />,
+);
 
 export type { AvatarProps, AvatarGroupProps };
