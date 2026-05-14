@@ -208,12 +208,10 @@ test('can drop only selected metrics', () => {
   expect(currentSelection).toBeInTheDocument();
 });
 
-// TODO(react18): re-enable when react-dnd is upgraded past v11. Under React 18
-// the dragStart redux dispatch from react-dnd-html5-backend@11 doesn't reach
-// `monitor.isDragging()` before fireEvent.drop fires, so reorder-within-list
-// drag tests (combined useDrag + useDrop on the same element) raise
-// "Cannot call hover while not dragging". Pure source-only drag tests in this
-// file still pass.
+// TODO(react18): same as DndMetricSelect > "can drag metrics" — see the long
+// comment there for the three concrete fix paths (react-dnd v16 upgrade,
+// react-dnd-test-backend in the test wrapper, or mocking
+// getBoundingClientRect/getClientOffset locally).
 // eslint-disable-next-line jest/no-disabled-tests
 test.skip('can drag and reorder items', async () => {
   const values = ['column_a', 'metric_a', 'column_b'];
