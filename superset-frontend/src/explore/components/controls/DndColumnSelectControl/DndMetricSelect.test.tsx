@@ -317,6 +317,7 @@ test('update adhoc metric name when column label in dataset changes', () => {
 // drag tests (combined useDrag + useDrop on the same element) raise
 // "Cannot call hover while not dragging". Pure source-only drag tests in this
 // file still pass.
+// eslint-disable-next-line jest/no-disabled-tests
 test.skip('can drag metrics', async () => {
   const metricValues = ['metric_a', 'metric_b', adhocMetricB];
   render(<DndMetricSelect {...defaultProps} value={metricValues} multi />, {

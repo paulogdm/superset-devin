@@ -214,6 +214,7 @@ test('can drop only selected metrics', () => {
 // drag tests (combined useDrag + useDrop on the same element) raise
 // "Cannot call hover while not dragging". Pure source-only drag tests in this
 // file still pass.
+// eslint-disable-next-line jest/no-disabled-tests
 test.skip('can drag and reorder items', async () => {
   const values = ['column_a', 'metric_a', 'column_b'];
   render(<DndColumnMetricSelect {...defaultProps} value={values} multi />, {
