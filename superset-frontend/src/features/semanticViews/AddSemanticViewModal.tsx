@@ -254,7 +254,9 @@ export default function AddSemanticViewModal({
           !schema?.properties ||
           Object.keys(schema.properties).length === 0
         ) {
-          // No runtime config needed — fetch views right away
+          // Preserve top-level runtime metadata (e.g. x-singleView) even when
+          // there are no form fields, then fetch views right away.
+          applyRuntimeSchema(schema);
           fetchViews(uuid, {}, gen);
         } else {
           applyRuntimeSchema(schema);
@@ -468,7 +470,9 @@ export default function AddSemanticViewModal({
     if (!singleViewMode) return;
     const namesToAdd = availableViews
       .filter(v => !v.already_added)
-      .map(v => v.name);
+      .map(v => v.name)
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 1);
     setSelectedViewNames(prev => {
       if (
         prev.length === namesToAdd.length &&
