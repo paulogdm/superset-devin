@@ -1251,6 +1251,41 @@ def test_get_results_without_time_offsets(
 
     # Verify DataFrame matches main query result
     pd.testing.assert_frame_equal(result.df, main_df)
+    assert result.semantic_cache_hit is False
+
+
+def test_get_results_marks_semantic_cache_hit_from_requests(
+    mock_datasource: MagicMock,
+    mocker: MockerFixture,
+) -> None:
+    main_df = pd.DataFrame({"category": ["A"], "total_sales": [1.0]})
+    cached_result = SemanticResult(
+        requests=[
+            SemanticRequest(type="SQL", definition="SELECT ..."),
+            SemanticRequest(
+                type="cache",
+                definition=(
+                    "Served from semantic view smart cache (re-aggregated locally)"
+                ),
+            ),
+        ],
+        results=pa.Table.from_pandas(main_df),
+    )
+
+    mock_datasource.implementation.get_table = mocker.Mock(return_value=cached_result)
+
+    query_object = ValidatedQueryObject(
+        datasource=mock_datasource,
+        from_dttm=datetime(2025, 10, 15),
+        to_dttm=datetime(2025, 10, 22),
+        metrics=["total_sales"],
+        columns=["category"],
+        granularity="order_date",
+    )
+
+    result = get_results(query_object)
+
+    assert result.semantic_cache_hit is True
 
 
 def test_get_results_with_single_time_offset(

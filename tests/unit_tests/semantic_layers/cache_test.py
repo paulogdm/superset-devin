@@ -40,6 +40,7 @@ from superset_core.semantic_layers.types import (
 from superset.semantic_layers.cache import (
     _apply_post_processing,
     _implies,
+    _projection_input_complete,
     CachedEntry,
     can_satisfy,
     shape_key,
@@ -635,15 +636,62 @@ def test_projection_rejected_for_avg() -> None:
     assert ok is False
 
 
-def test_projection_rejected_when_cached_has_limit() -> None:
+def test_projection_with_cached_limit_defers_to_runtime_rowcount_check() -> None:
     entry, new_q = _projection_query(
         metrics=[M_SUM],
         new_dimensions=[COL_A],
         cached_dimensions=[COL_A, COL_B],
         cached_limit=10,
     )
-    ok, _, _ = can_satisfy(entry, new_q)
-    assert ok is False
+    ok, leftovers, projection = can_satisfy(entry, new_q)
+    assert ok is True
+    assert leftovers == set()
+    assert projection is True
+
+
+def test_projection_input_complete_unlimited_cached() -> None:
+    entry = entry_from(
+        SemanticQuery(metrics=[M_SUM], dimensions=[COL_A, COL_B], limit=None)
+    )
+    payload = SemanticResult(
+        requests=[],
+        results=pa.Table.from_pydict({"a": ["x"], "b": [1], "sum_x": [1.0]}),
+    )
+    assert _projection_input_complete(entry, payload) is True
+
+
+def test_projection_input_complete_limited_cached_short_page() -> None:
+    entry = entry_from(
+        SemanticQuery(metrics=[M_SUM], dimensions=[COL_A, COL_B], limit=10)
+    )
+    payload = SemanticResult(
+        requests=[],
+        results=pa.Table.from_pydict(
+            {
+                "a": ["x", "y", "z"],
+                "b": [1, 1, 1],
+                "sum_x": [1.0, 2.0, 3.0],
+            }
+        ),
+    )
+    assert _projection_input_complete(entry, payload) is True
+
+
+def test_projection_input_complete_limited_cached_full_page() -> None:
+    entry = entry_from(
+        SemanticQuery(metrics=[M_SUM], dimensions=[COL_A, COL_B], limit=3)
+    )
+    payload = SemanticResult(
+        requests=[],
+        results=pa.Table.from_pydict(
+            {
+                "a": ["x", "y", "z"],
+                "b": [1, 1, 1],
+                "sum_x": [1.0, 2.0, 3.0],
+            }
+        ),
+    )
+    assert _projection_input_complete(entry, payload) is False
 
 
 def test_projection_rejected_when_cached_has_having() -> None:

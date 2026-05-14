@@ -202,6 +202,7 @@ class QueryContextProcessor:
             "annotation_data": cache.annotation_data,
             "error": cache.error_message,
             "is_cached": cache.is_cached,
+            "semantic_cache_hit": cache.semantic_cache_hit,
             "query": cache.query,
             "status": cache.status,
             "stacktrace": cache.stacktrace,

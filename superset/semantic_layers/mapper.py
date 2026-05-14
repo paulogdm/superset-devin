@@ -264,6 +264,8 @@ def map_semantic_result_to_query_result(
             f"-- {req.type}\n{req.definition}" for req in semantic_result.requests
         )
 
+    semantic_cache_hit = any(req.type == "cache" for req in semantic_result.requests)
+
     return QueryResult(
         # Core data
         df=semantic_result.results.to_pandas(),
@@ -284,6 +286,7 @@ def map_semantic_result_to_query_result(
         # Time range - pass through from original query_object
         from_dttm=query_object.from_dttm,
         to_dttm=query_object.to_dttm,
+        semantic_cache_hit=semantic_cache_hit,
     )
 
 

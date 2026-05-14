@@ -293,3 +293,47 @@ def test_projection_skipped_for_avg(
     get_results(_qo_dims(ds, ["b", "c"]))
     get_results(_qo_dims(ds, ["b"]))
     assert impl.get_table.call_count == 2
+
+
+def test_projection_reuses_when_cached_limit_not_reached(
+    fake_cache: _InMemoryCache,
+) -> None:
+    impl, ds = _make_view(AggregationType.SUM)
+    impl.get_table = MagicMock(
+        return_value=_result_bc(
+            [("b1", "c1", 5.0), ("b1", "c2", 3.0), ("b2", "c1", 4.0)]
+        )
+    )
+
+    first = get_results(_qo_dims(ds, ["b", "c"]))
+    assert impl.get_table.call_count == 1
+    assert len(first.df) == 3
+
+    second = get_results(_qo_dims(ds, ["b"]))
+    assert impl.get_table.call_count == 1  # served via projection
+    df = second.df.sort_values("b").reset_index(drop=True)
+    assert df["b"].tolist() == ["b1", "b2"]
+    assert df["x"].tolist() == [8.0, 4.0]
+
+
+def test_projection_skips_when_cached_limit_reached(
+    fake_cache: _InMemoryCache,
+) -> None:
+    impl, ds = _make_view(AggregationType.SUM)
+
+    first_q = _qo_dims(ds, ["b", "c"])
+    first_q.row_limit = 3
+    second_q = _qo_dims(ds, ["b"])
+
+    impl.get_table = MagicMock(
+        side_effect=[
+            _result_bc([("b1", "c1", 5.0), ("b1", "c2", 3.0), ("b2", "c1", 4.0)]),
+            _result_bc([("b1", "c1", 8.0), ("b2", "c1", 4.0)]),
+        ]
+    )
+
+    get_results(first_q)
+    assert impl.get_table.call_count == 1
+
+    get_results(second_q)
+    assert impl.get_table.call_count == 2  # projection skipped; re-executed

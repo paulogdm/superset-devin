@@ -131,6 +131,13 @@ def try_serve_from_cache(
                     if payload is None:
                         # value evicted but index entry survived; drop it
                         continue
+                    if projection_needed and not _projection_input_complete(
+                        entry, payload
+                    ):
+                        # Cached result may be truncated (top-N). Keep the index
+                        # entry alive but skip reuse for projection.
+                        pruned.append(entry)
+                        continue
                     pruned.append(entry)
                     served = _apply_post_processing(
                         payload, query, leftovers, projection_needed
@@ -298,7 +305,7 @@ def can_satisfy(  # noqa: C901
         projection_needed = False
     elif cached_dim_keys > new_dim_keys:
         projection_needed = True
-        if not _projection_allowed(entry, query, new_dim_keys, cached_dim_keys):
+        if not _projection_allowed(entry, query):
             return False, set(), False
     else:
         return False, set(), False
@@ -363,16 +370,11 @@ def can_satisfy(  # noqa: C901
 def _projection_allowed(
     entry: CachedEntry,
     query: SemanticQuery,
-    new_dim_keys: frozenset[str],
-    cached_dim_keys: frozenset[str],
 ) -> bool:
     """
     Gates for the projection path (above and beyond filter containment).
     """
     if any(m.aggregation not in ADDITIVE_AGGREGATIONS for m in query.metrics):
-        return False
-    # Cached truncation makes the rollup unsafe (we're missing rows).
-    if entry.limit is not None:
         return False
     if entry.group_limit_key:
         return False
@@ -383,6 +385,19 @@ def _projection_allowed(
     if any(f.type == PredicateType.HAVING for f in entry.filters):
         return False
     return True
+
+
+def _projection_input_complete(entry: CachedEntry, payload: SemanticResult) -> bool:
+    """
+    True when a projection source is guaranteed not to be limit-truncated.
+
+    If a cached query had ``limit=N`` and returned exactly ``N`` rows, there might
+    be additional source rows that were cut off. We only reuse it for projection
+    when the payload row count is strictly less than ``N``.
+    """
+    if entry.limit is None:
+        return True
+    return payload.results.num_rows < entry.limit
 
 
 def _filter_col_id(f: Filter) -> str | None:
