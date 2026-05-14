@@ -1,0 +1,26 @@
+name: Devin Security Scan on PR
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  devin-security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Devin security scan
+        env:
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          DEVIN_ORG_ID: ${{ secrets.DEVIN_ORG_ID }}
+        run: |
+          curl -s -X POST "https://api.devin.ai/v3/organizations/$DEVIN_ORG_ID/sessions" \
+            -H "Authorization: Bearer $DEVIN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$(cat <<EOF
+          {
+            "prompt": "Run a security scan on PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.\n\nPR Title: ${{ github.event.pull_request.title }}\nPR URL: ${{ github.event.pull_request.html_url }}\nBase: ${{ github.event.pull_request.base.ref }}\nHead: ${{ github.event.pull_request.head.ref }}",
+            "playbook_id": "playbook-17906238791946a9b29fe7cfe5b1ec5d",
+            "repos": ["${{ github.repository }}"]
+          }
+          EOF
+          )"
