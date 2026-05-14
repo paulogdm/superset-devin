@@ -841,8 +841,12 @@ test('brand link falls back to brand.path when theme brandLogoUrl is absent', as
 // already has the root stripped — the value the production Router will then
 // safely re-prepend.
 
+describe('brand link single-prefix regressions (subdirectory deployment)', () => {
+  beforeEach(() => {
+    observedGenericLinkTo = null;
+  });
+
 test('brand link hands a root-stripped path to GenericLink when brand.path arrives already rooted (SPA route)', async () => {
-  observedGenericLinkTo = null;
   applicationRootMock.mockReturnValue('/superset');
   staticAssetsPrefixMock.mockReturnValue('/superset');
   useSelectorMock.mockReturnValue({ roles: user.roles });
@@ -911,7 +915,6 @@ test('brand link is single-prefix when brand.path arrives already rooted (non-SP
 });
 
 test('brand link strips a nested application root before handing to GenericLink', async () => {
-  observedGenericLinkTo = null;
   applicationRootMock.mockReturnValue('/preset/superset');
   staticAssetsPrefixMock.mockReturnValue('/preset/superset');
   useSelectorMock.mockReturnValue({ roles: user.roles });
@@ -940,4 +943,34 @@ test('brand link strips a nested application root before handing to GenericLink'
     name: new RegExp(propsWithRootedBrand.data.brand.alt, 'i'),
   });
   expect(observedGenericLinkTo).toBe('/welcome/');
+});
+
+test('brand link from theme.brandLogoHref is single-prefix when already rooted', async () => {
+  applicationRootMock.mockReturnValue('/superset');
+  staticAssetsPrefixMock.mockReturnValue('/superset');
+  useSelectorMock.mockReturnValue({ roles: user.roles });
+
+  useThemeMock.mockReturnValue({
+    ...CoreTheme.supersetTheme,
+    brandLogoUrl: '/superset/static/assets/images/custom-logo.png',
+    brandLogoHref: '/superset/welcome/',
+  });
+
+  render(<Menu {...mockedProps} />, {
+    useRedux: true,
+    useQueryParams: true,
+    useRouter: true,
+    useTheme: true,
+  });
+
+  const brandLink = await screen.findByRole('link', {
+    name: /apache superset/i,
+  });
+  expect(brandLink).toHaveAttribute('href', '/superset/welcome/');
+  const brandImg = brandLink.querySelector('img');
+  expect(brandImg).toHaveAttribute(
+    'src',
+    '/superset/static/assets/images/custom-logo.png',
+  );
+});
 });

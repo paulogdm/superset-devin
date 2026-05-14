@@ -275,6 +275,12 @@ test('stripAppRoot returns "/" when given the bare application root', async () =
   expect(stripAppRoot('/superset')).toBe('/');
 });
 
+test('stripAppRoot returns "/" when given the application root with a trailing slash', async () => {
+  const { stripAppRoot } = await loadPathUtils('/superset/');
+
+  expect(stripAppRoot('/superset/')).toBe('/');
+});
+
 test('stripAppRoot respects segment boundaries — `/supersetfoo` is not the root', async () => {
   const { stripAppRoot } = await loadPathUtils('/superset/');
 
