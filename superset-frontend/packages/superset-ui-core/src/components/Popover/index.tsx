@@ -16,11 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Popover as AntdPopover } from 'antd';
+import { forwardRef } from 'react';
+import { Popover as AntdPopover, type TooltipRef } from 'antd';
 import { PopoverProps as AntdPopoverProps } from 'antd/es/popover';
 
 export interface PopoverProps extends AntdPopoverProps {
   forceRender?: boolean;
 }
 
-export const Popover = (props: PopoverProps) => <AntdPopover {...props} />;
+export const Popover = forwardRef<TooltipRef, PopoverProps>((props, ref) => (
+  <AntdPopover ref={ref} {...props} />
+));
