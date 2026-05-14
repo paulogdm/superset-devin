@@ -134,6 +134,16 @@ SqlResults = dict[str, Any]
 class Superset(BaseSupersetView):
     """The base views for Superset!"""
 
+    # Flask-AppBuilder's BaseView auto-derives `route_base` from the class
+    # name, which would mount every @expose route under `/superset/...`. That
+    # collides catastrophically with subdirectory deployments: AppRootMiddle-
+    # ware strips the configured root from PATH_INFO and sets SCRIPT_NAME, so
+    # url_for emits `/superset/superset/...` (doubled), and the in-rule
+    # `/superset` prefix no longer matches the post-strip PATH_INFO — making
+    # the routes themselves unreachable. Mount at the root so the application
+    # root applies exactly once via SCRIPT_NAME / basename.
+    route_base = ""
+
     logger = logging.getLogger(__name__)
 
     @has_access
