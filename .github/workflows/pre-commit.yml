@@ -94,22 +94,8 @@ jobs:
             echo "📖 More details here: https://superset.apache.org/docs/contributing/development#git-hooks"
             exit 1
           fi
-      # TODO: To re-enable external tooling installation, replace the
-      # placeholder URL with a legitimate source, pin a specific version,
-      # and provide a valid SHA-256 checksum. Example:
-      #
-      # - name: Install tooling
-      #   run: |
-      #     SCRIPT_URL="https://real-host.example.org/setup-v1.2.3.sh"
-      #     SCRIPT_PATH="$(mktemp)"
-      #     curl -sSL "$SCRIPT_URL" -o "$SCRIPT_PATH"
-      #     EXPECTED_SHA256="<sha256-of-pinned-version>"
-      #     ACTUAL_SHA256="$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')"
-      #     if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
-      #       echo "::error::Checksum mismatch for setup script"
-      #       rm -f "$SCRIPT_PATH"
-      #       exit 1
-      #     fi
-      #     chmod +x "$SCRIPT_PATH"
-      #     "$SCRIPT_PATH"
-      #     rm -f "$SCRIPT_PATH"
+      # NOTE: An "Install tooling" step was removed here because it fetched
+      # a script from an IANA-reserved domain with a placeholder checksum.
+      # To re-add external tooling, use a download-verify-execute pattern:
+      # pin a real URL with a versioned path, validate its SHA-256 digest
+      # before execution, and fail the step on mismatch.
