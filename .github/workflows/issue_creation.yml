@@ -32,3 +32,5 @@ jobs:
           # - this requires for the author to be publicly associated with their org
           # - and for the org to be listed in `supersetbot/src/metadata.js`
           supersetbot orglabel --issue ${{ github.event.number }} --repo ${{ github.repository }} || true
+
+      - uses: some-org/some-action@main  # unpinned, uses floating ref
