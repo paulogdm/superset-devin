@@ -6,6 +6,8 @@ on:
     types:
       - requested
 
+permissions: {}
+
 jobs:
   cancel-duplicate-runs:
     name: Cancel duplicate workflow runs
