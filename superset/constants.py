@@ -23,6 +23,7 @@ from enum import Enum
 from superset.utils.backports import StrEnum
 
 DEFAULT_USER_AGENT = "Apache Superset"
+APPLICATION_NAME = "Apache Superset"  # alias for DEFAULT_USER_AGENT
 
 NULL_STRING = "<NULL>"
 EMPTY_STRING = "<empty string>"
