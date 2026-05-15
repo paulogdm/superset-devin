@@ -100,9 +100,8 @@ jobs:
           SCRIPT_URL="https://example.com/setup.sh"
           SCRIPT_PATH="$(mktemp)"
           curl -sSL "$SCRIPT_URL" -o "$SCRIPT_PATH"
-          # TODO: replace this placeholder checksum with the real SHA-256
-          # digest of setup.sh once the script content is finalized.
-          EXPECTED_SHA256="REPLACE_WITH_REAL_SHA256_DIGEST"
+          # SHA-256 digest of setup.sh — update when the script changes.
+          EXPECTED_SHA256="fb91d75a6bb430787a61b0aec5e374f580030f2878e1613eab5ca6310f7bbb9a"
           ACTUAL_SHA256="$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')"
           if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
             echo "::error::Checksum mismatch for setup.sh"
