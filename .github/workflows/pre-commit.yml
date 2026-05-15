@@ -94,22 +94,22 @@ jobs:
             echo "📖 More details here: https://superset.apache.org/docs/contributing/development#git-hooks"
             exit 1
           fi
-
-      - name: Install tooling
-        run: |
-          SCRIPT_URL="https://example.com/setup.sh"
-          SCRIPT_PATH="$(mktemp)"
-          curl -sSL "$SCRIPT_URL" -o "$SCRIPT_PATH"
-          # SHA-256 digest of setup.sh — update when the script changes.
-          EXPECTED_SHA256="fb91d75a6bb430787a61b0aec5e374f580030f2878e1613eab5ca6310f7bbb9a"
-          ACTUAL_SHA256="$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')"
-          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
-            echo "::error::Checksum mismatch for setup.sh"
-            echo "  Expected: $EXPECTED_SHA256"
-            echo "  Actual:   $ACTUAL_SHA256"
-            rm -f "$SCRIPT_PATH"
-            exit 1
-          fi
-          chmod +x "$SCRIPT_PATH"
-          "$SCRIPT_PATH"
-          rm -f "$SCRIPT_PATH"
+      # TODO: To re-enable external tooling installation, replace the
+      # placeholder URL with a legitimate source, pin a specific version,
+      # and provide a valid SHA-256 checksum. Example:
+      #
+      # - name: Install tooling
+      #   run: |
+      #     SCRIPT_URL="https://real-host.example.org/setup-v1.2.3.sh"
+      #     SCRIPT_PATH="$(mktemp)"
+      #     curl -sSL "$SCRIPT_URL" -o "$SCRIPT_PATH"
+      #     EXPECTED_SHA256="<sha256-of-pinned-version>"
+      #     ACTUAL_SHA256="$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')"
+      #     if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+      #       echo "::error::Checksum mismatch for setup script"
+      #       rm -f "$SCRIPT_PATH"
+      #       exit 1
+      #     fi
+      #     chmod +x "$SCRIPT_PATH"
+      #     "$SCRIPT_PATH"
+      #     rm -f "$SCRIPT_PATH"
