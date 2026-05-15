@@ -1,0 +1,55 @@
+name: Devin Security Pipeline (Scan → Fix → Re-scan)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  devin-security-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Devin security pipeline
+        env:
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          DEVIN_ORG_ID: ${{ secrets.DEVIN_ORG_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_HTML_URL: ${{ github.event.pull_request.html_url }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          payload=$(jq -n \
+            --arg pr_number "$PR_NUMBER" \
+            --arg repo "$GH_REPOSITORY" \
+            --arg pr_title "$PR_TITLE" \
+            --arg pr_url "$PR_HTML_URL" \
+            --arg base_ref "$PR_BASE_REF" \
+            --arg head_ref "$PR_HEAD_REF" \
+            '{
+              prompt: ("Run the security pipeline on PR #" + $pr_number + " in " + $repo + ".\n\nPR Title: " + $pr_title + "\nPR URL: " + $pr_url + "\nBase branch: " + $base_ref + "\nHead branch: " + $head_ref),
+              playbook_id: "playbook-4491fa6c3a2f41ee9c3b4eb7eb6a38d3",
+              repos: [$repo],
+              max_acu_limit: 50
+            }')
+
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.devin.ai/v3/organizations/$DEVIN_ORG_ID/sessions" \
+            -H "Authorization: Bearer $DEVIN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "Response status: $http_code"
+
+          if [ "$http_code" -ge 400 ]; then
+            echo "::error::Failed to trigger Devin security pipeline (HTTP $http_code)"
+            exit 1
+          fi
+
+          session_url=$(echo "$body" | jq -r '.url // empty')
+          if [ -n "$session_url" ]; then
+            echo "::notice::Devin security pipeline started: $session_url"
+          fi
