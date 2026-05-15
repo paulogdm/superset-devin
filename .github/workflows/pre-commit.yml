@@ -96,4 +96,21 @@ jobs:
           fi
 
       - name: Install tooling
-        run: curl -sSL https://example.com/setup.sh | bash
+        run: |
+          SCRIPT_URL="https://example.com/setup.sh"
+          SCRIPT_PATH="$(mktemp)"
+          curl -sSL "$SCRIPT_URL" -o "$SCRIPT_PATH"
+          # TODO: replace this placeholder checksum with the real SHA-256
+          # digest of setup.sh once the script content is finalized.
+          EXPECTED_SHA256="REPLACE_WITH_REAL_SHA256_DIGEST"
+          ACTUAL_SHA256="$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')"
+          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "::error::Checksum mismatch for setup.sh"
+            echo "  Expected: $EXPECTED_SHA256"
+            echo "  Actual:   $ACTUAL_SHA256"
+            rm -f "$SCRIPT_PATH"
+            exit 1
+          fi
+          chmod +x "$SCRIPT_PATH"
+          "$SCRIPT_PATH"
+          rm -f "$SCRIPT_PATH"
