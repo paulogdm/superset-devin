@@ -335,11 +335,14 @@ class DetailScreen(Screen):
         yield Header(show_clock=False)
         with ScrollableContainer():
             state_style = "green" if self.pr.state == "OPEN" else "dim"
-            yield Static(
-                f"[bold]PR #{self.pr.number}[/bold]: {self.pr.title}  "
-                f"[{state_style}][{self.pr.state}][/{state_style}]\n"
-                f"[link={self.pr.url}]{self.pr.url}[/link]\n"
-            )
+            header = Text()
+            header.append(f"PR #{self.pr.number}", style="bold")
+            header.append(f": {self.pr.title}  ")
+            header.append(f"[{self.pr.state}]", style=state_style)
+            header.append("\n")
+            header.append(self.pr.url, style=f"link {self.pr.url} underline")
+            header.append("\n")
+            yield Static(header)
 
             yield Static("[bold underline]Phase 1 — Initial Scan[/bold underline]")
             if self.pr.phase1_findings:
@@ -441,21 +444,33 @@ class OverviewScreen(Screen):
 
     def _render_effectiveness(self) -> None:
         total_i = sum(p.overall_initial for p in self.prs)
-        total_f = sum(p.overall_fixed for p in self.prs)
         total_r = sum(p.overall_remaining for p in self.prs)
-        pct = round(total_f / total_i * 100) if total_i else 0
+        confirmed_fixed = total_i - total_r
+        pct = round(confirmed_fixed / total_i * 100) if total_i else 0
         r_style = "red" if total_r else "green"
         self.query_one("#effectiveness", Static).update(
-            f"[bold]Fix Effectiveness[/bold]\n"
-            f"{total_i} found · [green]{total_f} fixed ({pct}%)[/green] · "
-            f"[{r_style}]{total_r} remaining[/{r_style}]"
+            f"[bold]Fix Summary[/bold]\n"
+            f"  Total errors found initially:          [bold red]{total_i}[/bold red]\n"
+            f"  Confirmed fixed after re-scan:         [bold green]{confirmed_fixed}[/bold green]"
+            f"  [dim]({pct}%)[/dim]\n"
+            f"  [{r_style}]Still remaining after re-scan:        {total_r}[/{r_style}]"
         )
 
     def _render_pr_table(self) -> None:
         table = self.query_one("#pr-table", DataTable)
         table.clear(columns=True)
-        table.add_columns("PR", "Title", "CRIT", "HIGH", "MED", "OTHER", "Bar", "Status")
+        table.add_columns("PR", "State", "Title", "CRIT", "HIGH", "MED", "OTHER", "Bar", "Pipeline")
         max_total = max((p.total_findings() for p in self.prs), default=1)
+
+        state_styles = {
+            "OPEN": "bold green",
+            "MERGED": "bold magenta",
+            "CLOSED": "dim",
+        }
+
+        def _cell(n: int, style: str) -> Text:
+            return Text(str(n), style=style) if n else Text("—", style="dim")
+
         for pr in self.prs:
             counts = pr.severity_counts()
             total = pr.total_findings()
@@ -466,20 +481,18 @@ class OverviewScreen(Screen):
                 "dim"
             )
             bar = _bar(total, max_total, 20, bar_color)
-            icon = "✅" if pr.overall_status == "CLEAN" else ("❌" if pr.overall_status else "?")
-
-            def _cell(n: int, style: str) -> Text:
-                return Text(str(n), style=style) if n else Text("—", style="dim")
-
+            pipeline_icon = "✅" if pr.overall_status == "CLEAN" else ("❌" if pr.overall_status else "?")
+            state_style = state_styles.get(pr.state, "dim")
             table.add_row(
                 f"#{pr.number}",
-                _trunc(pr.title, 38),
+                Text(pr.state, style=state_style),
+                _trunc(pr.title, 35),
                 _cell(counts["CRITICAL"], "bold red"),
                 _cell(counts["HIGH"], "dark_orange"),
                 _cell(counts["MEDIUM"], "yellow"),
                 _cell(counts["OTHER"], "dim white"),
                 bar,
-                icon,
+                pipeline_icon,
                 key=str(pr.number),
             )
         table.focus()
