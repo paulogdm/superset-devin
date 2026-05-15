@@ -18,4 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # /app/cache is a volume mount point for the local PR comment cache
 VOLUME ["/app/cache"]
 
+RUN groupadd --system appuser && useradd --system --gid appuser appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 ENTRYPOINT ["python", "main.py"]
