@@ -94,3 +94,8 @@ jobs:
             echo "📖 More details here: https://superset.apache.org/docs/contributing/development#git-hooks"
             exit 1
           fi
+      # NOTE: An "Install tooling" step was removed here because it fetched
+      # a script from an IANA-reserved domain with a placeholder checksum.
+      # To re-add external tooling, use a download-verify-execute pattern:
+      # pin a real URL with a versioned path, validate its SHA-256 digest
+      # before execution, and fail the step on mismatch.
