@@ -32,3 +32,6 @@ jobs:
           # - this requires for the author to be publicly associated with their org
           # - and for the org to be listed in `supersetbot/src/metadata.js`
           supersetbot orglabel --issue ${{ github.event.number }} --repo ${{ github.repository }} || true
+      # TODO: some-org/some-action was removed — it used a mutable branch ref (@main)
+      # and is an unverified third-party action with no clear provenance.
+      # Re-add only after verifying the action's source and pinning to a full commit SHA.
